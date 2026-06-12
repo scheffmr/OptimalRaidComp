@@ -16,6 +16,7 @@ OptimalRaidCompDB = OptimalRaidCompDB or {
 
 local activeSummonFrame = nil
 local activeSortFrame = nil
+local slots  -- forward declaration; populated in the GUI section
 
 -- ==================== DATA TABLES & MAPPING ====================
 local classes = { "Warrior", "Paladin", "Hunter", "Rogue", "Priest", "Shaman", "Mage", "Warlock", "Druid", "DK" }
@@ -500,10 +501,11 @@ local function SummonComp(comp)
 
     SendChatMessage(".warstormbot bot remove *", "SAY")
     local watchFrame = CreateFrame("Frame")
+    activeSummonFrame = watchFrame  -- track now so STOP can abort during the pre-summon wait
     local wStart = GetTime()
     watchFrame:SetScript("OnUpdate", function(self)
         local members, _ = GetPartyMembers()
-        if #members <= 1 or (GetTime() - wStart > 5) then self:Hide(); StartSummoning() end
+        if #members <= 1 or (GetTime() - wStart > 5) then self:SetScript("OnUpdate", nil); self:Hide(); StartSummoning() end
     end)
 end
 
@@ -552,7 +554,7 @@ slots = {}
 for i = 1, MAX_ROWS do slots[i] = { class = "Warrior", spec = "prot", opt1 = "none", opt2 = "none", isPlayer = false } end
 
 local visibleRows = {}
-function UpdateVisibleRows()
+local function UpdateVisibleRows()
     local offset = FauxScrollFrame_GetOffset(fauxScroll)
     for i = 1, VISIBLE_ROWS do
         local idx = i + offset
@@ -682,9 +684,10 @@ compLabel:SetPoint("BOTTOMLEFT", 20, 55); compLabel:SetText("Profile:")
 local compDD = CreateFrame("Frame", "ORC_MainCompDD", frame, "UIDropDownMenuTemplate")
 compDD:SetPoint("LEFT", compLabel, "RIGHT", -15, -2); UIDropDownMenu_SetWidth(compDD, 120)
 
-local saveBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate"); saveBtn:SetSize(60, 22); saveBtn:SetPoint("LEFT", compDD, "RIGHT", -10, 2); saveBtn:SetText("Save")
-local renBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate"); renBtn:SetSize(65, 22); renBtn:SetPoint("LEFT", saveBtn, "RIGHT", 5, 0); renBtn:SetText("Rename")
-local delBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate"); delBtn:SetSize(60, 22); delBtn:SetPoint("LEFT", renBtn, "RIGHT", 5, 0); delBtn:SetText("Delete")
+local saveBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate"); saveBtn:SetSize(50, 22); saveBtn:SetPoint("LEFT", compDD, "RIGHT", -10, 2); saveBtn:SetText("Save")
+local saveAsBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate"); saveAsBtn:SetSize(62, 22); saveAsBtn:SetPoint("LEFT", saveBtn, "RIGHT", 5, 0); saveAsBtn:SetText("Save As")
+local renBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate"); renBtn:SetSize(62, 22); renBtn:SetPoint("LEFT", saveAsBtn, "RIGHT", 5, 0); renBtn:SetText("Rename")
+local delBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate"); delBtn:SetSize(55, 22); delBtn:SetPoint("LEFT", renBtn, "RIGHT", 5, 0); delBtn:SetText("Delete")
 
 -- LIVE ACTION BUTTONS
 local checkBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate"); checkBtn:SetSize(60, 22); checkBtn:SetPoint("BOTTOMLEFT", 15, 20); checkBtn:SetText("Roster")
@@ -725,7 +728,7 @@ summonBtn:SetScript("OnClick", function()
 end)
 
 -- DROPDOWN LOGIC
-function RefreshCompList()
+local function RefreshCompList()
     UIDropDownMenu_Initialize(compDD, function()
         for name, data in pairs(OptimalRaidCompDB.comps) do
             local cSize = data.size or 25
@@ -752,7 +755,7 @@ function RefreshCompList()
     else UIDropDownMenu_SetText(compDD, "Select Profile"); OptimalRaidCompDB.currentComp = nil end
 end
 
-function RefreshSizeDD()
+local function RefreshSizeDD()
     UIDropDownMenu_Initialize(sizeDD, function()
         local sizes = {5, 10, 25}
         for _, s in ipairs(sizes) do
@@ -768,27 +771,45 @@ function RefreshSizeDD()
     UIDropDownMenu_SetText(sizeDD, (OptimalRaidCompDB.raidSize or 25) .. "-Man")
 end
 
+-- Writes the current UI layout into the named profile (creates or overwrites it).
+local function SaveCurrentToProfile(name)
+    if not name or name == "" then return end
+    OptimalRaidCompDB.comps[name] = { size = OptimalRaidCompDB.raidSize, slots = {} }
+    for j=1, MAX_ROWS do
+        OptimalRaidCompDB.comps[name].slots[j] = { class=slots[j].class, spec=slots[j].spec, opt1=slots[j].opt1, opt2=slots[j].opt2, isPlayer=slots[j].isPlayer }
+    end
+    OptimalRaidCompDB.currentComp = name
+    RefreshCompList(); UIDropDownMenu_SetText(ORC_MainCompDD, name)
+    print("|cff00ff00[ORC] Profile saved: " .. name .. "|r")
+end
+
 -- POPUP DEFINITIONS
 StaticPopupDialogs["ORC_SAVE_NEW"] = {
     text = "Name your new template:", button1 = "Save", button2 = "Cancel", hasEditBox = 1,
     OnShow = function(self) self.editBox:SetText("Comp " .. math.random(100, 999)); self.editBox:HighlightText() end,
-    OnAccept = function(self)
-        local name = self.editBox:GetText()
-        if name ~= "" then
-            OptimalRaidCompDB.comps[name] = { size = OptimalRaidCompDB.raidSize, slots = {} }
-            for j=1, MAX_ROWS do
-                OptimalRaidCompDB.comps[name].slots[j] = { class=slots[j].class, spec=slots[j].spec, opt1=slots[j].opt1, opt2=slots[j].opt2, isPlayer=slots[j].isPlayer }
-            end
-            OptimalRaidCompDB.currentComp = name; RefreshCompList(); UIDropDownMenu_SetText(ORC_MainCompDD, name)
-        end
-    end,
+    OnAccept = function(self) SaveCurrentToProfile(self.editBox:GetText()) end,
     EditBoxOnEnterPressed = function(self) self:GetParent().button1:Click() end,
+    timeout = 0, whileDead = 1, hideOnEscape = 1
+}
+
+StaticPopupDialogs["ORC_OVERWRITE"] = {
+    text = "Overwrite profile \"%s\" with the current layout?",
+    button1 = "Overwrite", button2 = "Cancel",
+    OnAccept = function(self, data) SaveCurrentToProfile(data) end,
     timeout = 0, whileDead = 1, hideOnEscape = 1
 }
 
 StaticPopupDialogs["ORC_RENAME"] = { text = "Rename Template:", button1 = "Rename", button2 = "Cancel", hasEditBox = 1, OnAccept = function(self) local new = self.editBox:GetText(); if new ~= "" and OptimalRaidCompDB.currentComp then OptimalRaidCompDB.comps[new] = OptimalRaidCompDB.comps[OptimalRaidCompDB.currentComp]; OptimalRaidCompDB.comps[OptimalRaidCompDB.currentComp] = nil; OptimalRaidCompDB.currentComp = new; RefreshCompList() end end, timeout = 0, whileDead = 1, hideOnEscape = 1 }
 
-saveBtn:SetScript("OnClick", function() StaticPopup_Show("ORC_SAVE_NEW") end)
+saveBtn:SetScript("OnClick", function()
+    local cur = OptimalRaidCompDB.currentComp
+    if cur and OptimalRaidCompDB.comps[cur] then
+        StaticPopup_Show("ORC_OVERWRITE", cur, nil, cur)
+    else
+        StaticPopup_Show("ORC_SAVE_NEW")
+    end
+end)
+saveAsBtn:SetScript("OnClick", function() StaticPopup_Show("ORC_SAVE_NEW") end)
 renBtn:SetScript("OnClick", function() if OptimalRaidCompDB.currentComp then StaticPopup_Show("ORC_RENAME") end end)
 delBtn:SetScript("OnClick", function()
     if OptimalRaidCompDB.currentComp then OptimalRaidCompDB.comps[OptimalRaidCompDB.currentComp] = nil; OptimalRaidCompDB.currentComp = nil; UIDropDownMenu_SetText(compDD, "Select"); RefreshCompList() end

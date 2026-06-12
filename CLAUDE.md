@@ -94,9 +94,25 @@ These are the exact strings ORC sends. **Warstorm-specific — preserve verbatim
 
 ## TODO
 
-- [ ] **Bug pass** — review the addon for bugs (summon state-machine edge cases, timeout
-      handling, dropped-invite recovery, 5-man vs raid branching, dropdown/spec context
-      mismatches, saved-variable migration). Fix issues found.
+- [x] **Bug pass (first round)** — fixed:
+  - Localized `slots` and the `UpdateVisibleRows` / `RefreshCompList` / `RefreshSizeDD`
+    functions (were leaking as globals; `slots` is a high-collision name with other addons).
+  - STOP button now aborts during the initial 5s "remove bots" wait (previously the
+    pre-summon watch frame wasn't tracked, so STOP did nothing and summoning fired anyway).
+- [ ] **Bug pass — remaining findings (not yet fixed):**
+  - **Same-class spec ambiguity:** spec/buff assignment matches bots to slots by *class only*
+    (`PushSpecs`, `SummonComp.Finalize`, `PushSingleSpec`). With two same-class bots of
+    different specs (e.g. Holy + Ret Paladin), which bot gets which spec depends on roster
+    order and can be swapped. Needs a deterministic assignment (e.g. order-stable pairing).
+  - **Warrior shout options have no `STRAT_MAP` entry:** `battle`/`commanding` fall through to
+    `nc +battle` / `nc +commanding`. Confirm Warstorm accepts those tokens, or map them.
+  - **Overwriting "Default 5-Man" in a non-5 size** saves `size` = current raidSize, but login
+    forces it back to 5 and only reloads slots — mildly inconsistent.
+  - Cosmetic: `delBtn` sets the dropdown text to "Select" while `RefreshCompList` uses
+    "Select Profile".
+- [x] **Save / overwrite profiles** — `Save` now overwrites the selected profile (with an
+      "Overwrite?" confirm) and falls back to a name prompt when nothing is selected; added a
+      dedicated **Save As** button for creating new profiles.
 - [ ] **Version sync** — reconcile the v2.6 (`.lua`) vs v2.4 (`.toc`/`readme`) mismatch.
 - [ ] **UI overhaul with ElvUI support** — detect ElvUI at load (e.g. via the `ElvUI`
       global / `LibStub("ElvUI")`) and, when present, restyle ORC's frames, buttons, and
