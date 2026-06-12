@@ -1,0 +1,9 @@
+## Interface: 30300
+## Title: Optimal Raid Comp Manager
+## Notes: Playerbots Strategy Mapping, Context Dropdowns, and Shaman Tooltips.
+## Author: Xhausted
+## Optimization: Runshouse
+## Version: 2.4
+## SavedVariables: OptimalRaidCompDB
+
+OptimalRaidComp.lua
