@@ -1,6 +1,7 @@
--- Optimal Raid Comp Manager (v2.6)
+-- Optimal Raid Comp Manager (v2.7)
 -- Author: Runshouse (Original design by Xhausted)
--- Features: Priest Shadow Res toggle, Shaman Totem Dropdown Tooltips.
+-- Features: Priest Shadow Res toggle, Shaman Totem Dropdown Tooltips,
+--           Overwrite-on-Save profiles, optional ElvUI skinning.
 
 local PADDING, SLOT_HEIGHT = 10, 30
 local CLASS_COL_WIDTH, SPEC_COL_WIDTH = 100, 90 
@@ -845,6 +846,60 @@ launch:SetScript("OnClick", function(self, button) if button == "LeftButton" the
 launch:SetScript("OnDragStart", function(self) self:StartMoving() end)
 launch:SetScript("OnDragStop", function(self) self:StopMovingOrSizing(); local _, _, _, x, y = self:GetPoint(); OptimalRaidCompDB.buttonPos = { x = x, y = y } end)
 
+-- ==================== ELVUI SKINNING (optional) ====================
+-- If ElvUI is loaded, restyle every ORC widget through its Skins module so the
+-- addon blends into the ElvUI look. Entirely defensive: any failure is caught and
+-- the addon keeps working with the default Blizzard appearance.
+local elvSkinned = false
+local function ApplyElvUISkin()
+    if elvSkinned or not _G.ElvUI then return end
+
+    local ok, err = pcall(function()
+        local E = unpack(_G.ElvUI)
+        if not E then return end
+        local S = E:GetModule("Skins", true)
+        if not S then return end
+
+        local function btn(b) if b and S.HandleButton then S:HandleButton(b) end end
+        local function dd(d)  if d and S.HandleDropDownBox then S:HandleDropDownBox(d) end end
+        local function chk(c) if c and S.HandleCheckBox then S:HandleCheckBox(c) end end
+
+        -- Main window
+        if frame.StripTextures then frame:StripTextures() end
+        if frame.SetTemplate then frame:SetTemplate("Transparent") end
+        if closeBtn and S.HandleCloseButton then S:HandleCloseButton(closeBtn) end
+
+        -- Per-row widgets
+        for _, row in ipairs(visibleRows) do
+            dd(row.classDD); dd(row.specDD); dd(row.opt1DD); dd(row.opt2DD)
+            chk(row.playerCheck)
+            btn(row.specBtn)
+        end
+
+        -- Bottom controls
+        dd(sizeDD); dd(compDD)
+        btn(saveBtn); btn(saveAsBtn); btn(renBtn); btn(delBtn)
+        btn(checkBtn); btn(zoneBtn); btn(pushSpecBtn); btn(pushGearBtn)
+        btn(pushBuffBtn); btn(sortBtn); btn(summonBtn)
+
+        -- Scrollbar
+        local sb = _G["OptimalRaidCompFauxScrollScrollBar"]
+        if sb and S.HandleScrollBar then S:HandleScrollBar(sb) end
+
+        -- Launcher
+        if launch.StripTextures then launch:StripTextures() end
+        if launch.SetTemplate then launch:SetTemplate("Transparent") end
+        btn(qs); btn(stopBtn)
+    end)
+
+    if ok then
+        elvSkinned = true
+        print("|cffffcc00[ORC]|r |cff00ff00ElvUI detected - interface skinned.|r")
+    else
+        print("|cffff0000[ORC] ElvUI skin failed (using default look): " .. tostring(err) .. "|r")
+    end
+end
+
 local l = CreateFrame("Frame"); l:RegisterEvent("PLAYER_LOGIN")
 l:SetScript("OnEvent", function()
     frame:SetScale(OptimalRaidCompDB.scale or 1.0)
@@ -864,6 +919,7 @@ l:SetScript("OnEvent", function()
     end
 
     RefreshSizeDD(); RefreshCompList(); UpdateVisibleRows()
+    ApplyElvUISkin()
 end)
 
 SLASH_ORC1 = "/orc"

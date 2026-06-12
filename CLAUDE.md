@@ -29,8 +29,8 @@ Credits: Author **Runshouse**, original design by **Xhausted**.
 | `readme.md` | User-facing documentation. |
 | `CLAUDE.md` | This file. |
 
-> **Version note:** the `.lua` header reads **v2.6** while `.toc`/`readme.md` still say **v2.4**.
-> Keep these in sync when bumping versions.
+> **Version note:** `.lua` header and `.toc` are now both **v2.7**. `readme.md` narrative still
+> references v2.4 — update its "What's New" section when doing the readme pass.
 
 ## How to use it in-game
 
@@ -55,6 +55,12 @@ Credits: Author **Runshouse**, original design by **Xhausted**.
 - **`SafeSummon`** (~line 518) + `ORC_CONFIRM_SUMMON` popup: confirms before wiping an existing group.
 - **`SortRaidGroup`**: role-based subgroup packing (melee/tanks → ranged/casters → healers).
 - **UI build** (~line 526+): main frame, per-row dropdowns, bottom action row, launcher (~line 798).
+- **`ApplyElvUISkin`** (near the end, before the login handler): optional — if `_G.ElvUI`
+  exists, skins every widget via `E:GetModule("Skins")` (`HandleButton`/`HandleDropDownBox`/
+  `HandleCheckBox`/`HandleCloseButton`/`HandleScrollBar`, plus `SetTemplate("Transparent")` on
+  the main frame and launcher). Whole body is `pcall`-wrapped and runs once (`elvSkinned`
+  guard) from `PLAYER_LOGIN`. No-ops cleanly when ElvUI is absent. `.toc` lists
+  `## OptionalDeps: ElvUI` so ElvUI loads first when present.
 - **Slash command** (~line 848): `SLASH_ORC1 = "/orc"`.
 
 ## Bot command reference
@@ -113,8 +119,10 @@ These are the exact strings ORC sends. **Warstorm-specific — preserve verbatim
 - [x] **Save / overwrite profiles** — `Save` now overwrites the selected profile (with an
       "Overwrite?" confirm) and falls back to a name prompt when nothing is selected; added a
       dedicated **Save As** button for creating new profiles.
-- [ ] **Version sync** — reconcile the v2.6 (`.lua`) vs v2.4 (`.toc`/`readme`) mismatch.
-- [ ] **UI overhaul with ElvUI support** — detect ElvUI at load (e.g. via the `ElvUI`
-      global / `LibStub("ElvUI")`) and, when present, restyle ORC's frames, buttons, and
-      dropdowns to match ElvUI's skin (backdrop, fonts, button templates). Fall back cleanly
-      to the default Blizzard look when ElvUI is absent.
+- [x] **UI overhaul with ElvUI support** — `ApplyElvUISkin()` detects `_G.ElvUI` at login and
+      skins all frames/buttons/dropdowns/checkboxes/scrollbar via the ElvUI Skins module, with
+      `SetTemplate("Transparent")` on the main window and launcher. Defensive (`pcall`, runs
+      once) and falls back to the Blizzard look when ElvUI is absent. **Not yet tested in-game**
+      — verify visually with ElvUI enabled (esp. dropdown text/width and row alignment).
+- [ ] **Version sync** — `.lua`/`.toc` now v2.7; still need to refresh `readme.md`'s v2.4
+      "What's New" narrative.
