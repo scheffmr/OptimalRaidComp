@@ -54,3 +54,9 @@ Type `/orc` in chat or click the floating **ORC** mini-launcher button to open t
 ## Credits
 * **Author:** Runshouse
 * **Original Design:** Xhausted
+
+## Original / Upstream
+
+This addon is a fork. The original is **not on GitHub**; it lives on the Warstorm forums:
+
+* https://forum.warstorm.org/showthread.php?tid=73
