@@ -24,44 +24,74 @@ Credits: Authors **Runshouse** and **Marco**, original design by **Xhausted**.
 
 | File | Purpose |
 |------|---------|
-| `OptimalRaidComp.toc` | Addon manifest. Declares `Interface: 30300` and `SavedVariables: OptimalRaidCompDB`. |
-| `OptimalRaidComp.lua` | Entire addon — UI, data tables, summon state machine, bot commands, sorting. |
+| `OptimalRaidComp.toc` | Addon manifest. Declares `Interface: 30300`, `SavedVariables: OptimalRaidCompDB`, loads `Bindings.xml` then the `.lua`. |
+| `OptimalRaidComp.lua` | Entire addon — UI, data tables, summon state machine, bot commands, sorting, bot-control tab, trade payout. |
+| `Bindings.xml` | Key bindings (toggle/summon/attack/follow/stay/RTSC); calls `ORC_*` globals by name. |
 | `readme.md` | User-facing documentation. |
 | `CLAUDE.md` | This file. |
 
-> **Version note:** `.lua` header, `.toc`, and `readme.md` are all on **v2.8**.
+> **Version note:** `.lua` header, `.toc`, and `readme.md` are on **v2.8**. The bot-control
+> merge (below) is committed but **awaiting an in-game test before the version is bumped** (to
+> v2.9). Bump all three together when verified.
+
+> **Supersedes `WarstormBotManager`.** ORC absorbed that addon's runtime bot-control features
+> (behavior grid, formations, summon/release/drink/skull/CC, RTSC, trade payout, level-up
+> reinit). WarstormBotManager is discontinued; disable it to avoid duplicate keybinds/handlers.
 
 ## How to use it in-game
 
 - Open/close UI: `/orc` slash command, or left-click the floating **ORC** launcher button.
+- **Tabs:** **Compose** (build/summon a comp) and **Control** (live bot orders).
 - **Move the main window:** left-click-drag the window background.
 - **Move the launcher button:** **right**-click-drag (left-click = Quick Create).
 - **Resize the main window:** mouse-wheel over it (scale clamped 0.5–2.0, persisted).
+- **Slash extras:** `/orc reinit`, `/orc loot`, `/orc tradewhisper [on|off]`, `/orc tradevalue`.
+- **Keybinds:** Esc → Key Bindings → "Optimal Raid Comp" (toggle, summon, attack, follow, stay, RTSC).
 
 ## Code map (`OptimalRaidComp.lua`)
 
-- **Saved variables** (`OptimalRaidCompDB`, ~line 9): `comps`, `currentComp`, `buttonPos`, `scale`, `raidSize`.
-- **Data tables** (~line 20): `classes`, `specsByClass`, `CLASS_TO_CMD`, `UNIT_TO_SHORT`.
-- **`STRAT_MAP`** (~line 33): translates friendly UI labels (`kings`, `devotion`, `fire res`…)
-  into Warstorm strategy tokens (`bstats`, `barmor`, `rfire`…).
-- **`TOTEM_TOOLTIPS`** (~line 51) + **`GetOptionsForClassSpec`** (~line 61): context-aware,
-  spec-dependent buff/aura/totem dropdown options (Paladin, Shaman, Priest). Warriors have no
-  options dropdown — the server has no shout strategy tokens.
-- **`PushAutogear` / `PushWorldBuffs`** (~line 235): manual party/raid broadcast actions.
-- **Spec push helpers** (~line 272, ~314): whisper per-bot talent spec + strategy/totems.
-- **`SummonComp` / summon state machine** (~line 367): an `OnUpdate` frame driving phases
-  1→4 (first summon → wait for join → ConvertToRaid → mass summon → init → specs → gear →
-  buffs → sort). Paces invites against group size to survive server lag.
-- **`SafeSummon`** (~line 518) + `ORC_CONFIRM_SUMMON` popup: confirms before wiping an existing group.
+(Single file; line numbers drift, so this lists sections in load order.)
+
+- **Saved variables** (`OptimalRaidCompDB`): `comps`, `currentComp`, `buttonPos`, `scale`,
+  `raidSize`, plus control state `selectedTab`, `selectedFormation(+Index)`, `controlExpanded`,
+  `autoLevelUp`, `tradeWhisper`. A `do` block seeds new keys into existing DBs at load.
+- **`BuildCompFromSlots`**: snapshots the visible rows into a comp table (used by buttons,
+  the level-up handler, and the control tab). Hoisted early so all of those can reach it.
+- **Data tables**: `classes`, `specsByClass`, `CLASS_TO_CMD`, `UNIT_TO_SHORT`, `STRAT_MAP`
+  (UI label → Warstorm strategy token), `TOTEM_TOOLTIPS`.
+- **Shared infrastructure (bot control):**
+  - `SendBotOrder(msg)` — raid-aware order broadcast (RAID in a raid, else PARTY).
+  - `After(delay, fn)` — a single OnUpdate scheduler frame (`schedPending`); no `C_Timer` on 3.3.5a.
+  - `confirmFrame` + `AwaitSpecConfirms(names, timeout, onDone)` + `WarnSpecMissing` — wait for
+    each bot's `picking <spec>` WHISPER before autogear (6s timeout, warns on miss).
+- **Control data**: `formations`, `roles` (each has a `@<role> ` prefix; `all` is bare),
+  `actions` (`attack/stay/follow/flee`), `footer` (Summon/Release/Drink/Skull/CC).
+- **`GetOptionsForClassSpec`**: spec-dependent buff/aura/totem dropdown options (Paladin,
+  Shaman, Priest). Warriors have no options dropdown — the server has no shout tokens.
+- **`PushAutogear` / `PushWorldBuffs` / `SetGroupLoot`** (`IsGroupLeader` → Free For All + Epic).
+- **`WhisperCompSpecs`** (shared whisper loop, returns whispered names) + **`PushSpecs`**.
+- **`SummonComp` / summon state machine**: an `OnUpdate` frame driving phases 1→4 (first summon
+  → wait for join → ConvertToRaid → mass summon → init). Finalize whispers specs, sets loot,
+  then **confirm-gates autogear** via `AwaitSpecConfirms` (replaces the old fixed 10s wait) →
+  world buffs → sort. Paces invites against group size to survive server lag.
+- **`SafeSummon`** + `ORC_CONFIRM_SUMMON` popup: confirms before wiping an existing group.
+- **`ReinitBots(comp)`**: per-bot `init=epic` + re-spec + autogear; defers in combat (sets
+  `reinitPending`/`pendingReinitComp`), and the `PLAYER_REGEN_ENABLED` handler retries 3s after
+  combat ends. Auto-fires on `PLAYER_LEVEL_UP` (gated by `autoLevelUp`).
 - **`SortRaidGroup`**: role-based subgroup packing (melee/tanks → ranged/casters → healers).
-- **UI build** (~line 526+): main frame, per-row dropdowns, bottom action row, launcher (~line 798).
-- **`ApplyElvUISkin`** (near the end, before the login handler): optional — if `_G.ElvUI`
-  exists, skins every widget via `E:GetModule("Skins")` (`HandleButton`/`HandleDropDownBox`/
-  `HandleCheckBox`/`HandleCloseButton`/`HandleScrollBar`, plus `SetTemplate("Transparent")` on
-  the main frame and launcher). Whole body is `pcall`-wrapped and runs once (`elvSkinned`
-  guard) from `PLAYER_LOGIN`. No-ops cleanly when ElvUI is absent. `.toc` lists
-  `## OptionalDeps: ElvUI` so ElvUI loads first when present.
-- **Slash command** (~line 848): `SLASH_ORC1 = "/orc"`.
+- **Trade payout**: hidden-tooltip vendor-value scan (`GetItemInfo` has no sell price on
+  3.3.5a) → whisper partner 3× value on `TRADE_PLAYER_ITEM_CHANGED`. Gated by `tradeWhisper`.
+- **UI build**: main frame (700×490), per-row dropdowns, bottom action row.
+- **Control tab** (`do` block): tab strip (`ShowTab` group-hides the compose widgets vs the
+  `controlPanel`), formation cycler, role×action grid (all+tank default; `More`/`Less` reveals
+  the rest via `RefreshControlLayout`, which repositions the footer), footer + Reinit/Loot +
+  checkboxes. **Attack-reset** lives in `GridClick`: tracks `lastOrder` per role and prepends
+  `follow` when it was stay/flee, and a double-tap of attack within 1.5s forces the reset.
+- **Launcher** + **`ApplyElvUISkin`** (optional, `pcall`-wrapped, runs once from `PLAYER_LOGIN`;
+  also skins the control-tab buttons/checkboxes; no-ops without ElvUI; `.toc` `OptionalDeps: ElvUI`).
+- **Keybinding globals** (`ORC_Toggle`/`ORC_Summon`/…, `BINDING_*` labels) — the only
+  intentional globals, required because Bindings.xml calls functions by name.
+- **Slash command**: `/orc` (+ `reinit`/`loot`/`tradewhisper`/`tradevalue` subcommands).
 
 ## Bot command reference
 
@@ -82,6 +112,24 @@ These are the exact strings ORC sends. **Warstorm-specific — preserve verbatim
 | `nc totems <set>` | WHISPER | Set Shaman totem set (`melee`, `caster`, `healing`, `fire res`…). |
 | `nc +worldbuff` | RAID / PARTY | Apply world buffs to the group. |
 | `autogear` | RAID / PARTY | Re-gear the whole group. |
+
+### Live bot orders (Control tab / keybinds, via `SendBotOrder` → RAID or PARTY)
+Bots reply to spec whispers with `picking <spec>` (listened for by `confirmFrame`).
+
+| Command | Purpose |
+|---------|---------|
+| `formation <shield\|chaos\|circle\|line\|melee\|near\|queue\|arrow>` | Set bot formation. |
+| `formation` | Query/check current formation. |
+| `attack` / `stay` / `follow` / `flee` | Behavior for all bots. |
+| `@<tank\|heal\|dps\|melee\|ranged> <action>` | Same behavior, role-scoped (e.g. `@tank attack`). |
+| `summon` / `release` / `drink` | Footer actions (teleport to you / release / rest). |
+| `rti skull` then `attack rti target` | Skull button: mark + attack the marked target. |
+| `rti cc moon` | CC button: crowd-control the moon target. |
+| `rtsc` / `rtsc save 1` / `rtsc go 1` | RTSC waypoint control (keybinds only). |
+
+> **Attack-reset:** `stay`/`flee` lock bots until a `follow`. The grid's `attack` auto-prepends
+> `follow` (0.3s gap) when ORC's tracked last order for that role was stay/flee; a double-tap of
+> attack within 1.5s forces the same reset for locks ORC didn't set.
 
 ### Strategy tokens (`STRAT_MAP`)
 `might→bdps`, `wisdom→bmana`, `kings→bstats`, `sanctuary→bhealth`, `devotion→barmor`,
@@ -126,3 +174,12 @@ These are the exact strings ORC sends. **Warstorm-specific — preserve verbatim
       once) and falls back to the Blizzard look when ElvUI is absent. Confirmed working in-game.
 - [x] **Version sync** — `.lua`, `.toc`, and `readme.md` are all on v2.8; readme "What's New"
       refreshed with a v2.8 section.
+- [ ] **Merge WarstormBotManager → ORC (bot control)** — committed in stages: scheduler +
+      spec-confirm gating + loot + reinit/level-up; trade payout; Compose/Control tabs + grid +
+      attack-reset; keybindings (`Bindings.xml`); docs. **Pending in-game verification, then
+      bump `.lua`/`.toc`/`readme.md` to v2.9.** Things to watch in testing:
+  - RAID-channel bot orders actually reach bots in 10/25-man (WBM was party-only — fall back to
+    PARTY if Warstorm ignores RAID-channel orders).
+  - Compose tab unchanged vs. before (group-hide/show; window grew 465→490 for the tab strip).
+  - Spec-confirm gating doesn't hang summon if `picking` replies never arrive (6s timeout gears anyway).
+  - Disable the old `WarstormBotManager` addon so its keybinds/handlers don't double-fire.
