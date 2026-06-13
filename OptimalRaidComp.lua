@@ -26,6 +26,7 @@ do
     if db.autoLevelUp == nil then db.autoLevelUp = true end
     if db.tradeWhisper == nil then db.tradeWhisper = true end
     if db.cmdWinPos == nil then db.cmdWinPos = { x = 300, y = 0 } end
+    if db.cmdWinShown == nil then db.cmdWinShown = false end
 end
 
 local activeSummonFrame = nil
@@ -906,10 +907,10 @@ for i = 1, VISIBLE_ROWS do
     
     local cDD = CreateFrame("Frame", "ORC_CDD"..i, r, "UIDropDownMenuTemplate"); cDD:SetPoint("LEFT", 15, -2); UIDropDownMenu_SetWidth(cDD, 90)
     local sDD = CreateFrame("Frame", "ORC_SDD"..i, r, "UIDropDownMenuTemplate"); sDD:SetPoint("LEFT", 125, -2); UIDropDownMenu_SetWidth(sDD, 80)
-    local o1DD = CreateFrame("Frame", "ORC_O1DD"..i, r, "UIDropDownMenuTemplate"); o1DD:SetPoint("LEFT", 225, -2); UIDropDownMenu_SetWidth(o1DD, 90)
-    local o2DD = CreateFrame("Frame", "ORC_O2DD"..i, r, "UIDropDownMenuTemplate"); o2DD:SetPoint("LEFT", 335, -2); UIDropDownMenu_SetWidth(o2DD, 90)
-    
-    local pCT = r:CreateFontString(nil, "OVERLAY", "GameFontNormal"); pCT:SetPoint("LEFT", 460, 0); pCT:SetText("Player:")
+    local o1DD = CreateFrame("Frame", "ORC_O1DD"..i, r, "UIDropDownMenuTemplate"); o1DD:SetPoint("LEFT", 225, -2); UIDropDownMenu_SetWidth(o1DD, 80)
+    local o2DD = CreateFrame("Frame", "ORC_O2DD"..i, r, "UIDropDownMenuTemplate"); o2DD:SetPoint("LEFT", 330, -2); UIDropDownMenu_SetWidth(o2DD, 80)
+
+    local pCT = r:CreateFontString(nil, "OVERLAY", "GameFontNormal"); pCT:SetPoint("LEFT", 485, 0); pCT:SetText("Player:")
     local pC = CreateFrame("CheckButton", nil, r, "UICheckButtonTemplate"); pC:SetPoint("LEFT", pCT, "RIGHT", 5, 0); pC:SetScale(0.85)
     local sBtn = CreateFrame("Button", nil, r, "UIPanelButtonTemplate"); sBtn:SetSize(45, 20); sBtn:SetPoint("LEFT", pC, "RIGHT", 15, 0); sBtn:SetText("Spec")
     
@@ -1208,8 +1209,6 @@ do
     end)
     cmdWin:SetBackdrop({bgFile="Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border", tile=true, tileSize=32, edgeSize=32, insets={left=11, right=12, top=12, bottom=11}})
     cmdWin:SetBackdropColor(0, 0, 0, 1)
-    cmdWin:Hide()
-    tinsert(UISpecialFrames, "ORC_CommandsWindow")
 
     cmdClose = CreateFrame("Button", nil, cmdWin, "UIPanelCloseButton"); cmdClose:SetPoint("TOPRIGHT", -4, -4)
     local cmdTitle = cmdWin:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -1285,6 +1284,13 @@ do
         RefreshControlLayout()
     end)
     RefreshControlLayout()
+
+    -- Persist open/closed across reloads & zoning. Deliberately NOT in UISpecialFrames
+    -- so Escape / loading screens (CloseSpecialWindows) can't auto-close it -- once the
+    -- user opens it, it stays until they close it via the button or its X.
+    cmdWin:SetScript("OnShow", function() OptimalRaidCompDB.cmdWinShown = true end)
+    cmdWin:SetScript("OnHide", function() OptimalRaidCompDB.cmdWinShown = false end)
+    if OptimalRaidCompDB.cmdWinShown then cmdWin:Show() else cmdWin:Hide() end
 end
 
 -- ==================== LAUNCHER ====================

@@ -44,7 +44,8 @@ Credits: Authors **Runshouse** and **Marco**, original design by **Xhausted**.
 - **Main window** builds/summons a comp and holds the formation cycler, **Reinit**, **Loot FFA**,
   the two toggles (auto-reinit, trade-whisper), and a **Commands** button.
 - **Commands** button opens a separate movable **ORC Commands** window (the behavior grid +
-  Summon/Release/Drink/Skull/CC footer + More). Drag it anywhere; position persists.
+  Summon/Release/Drink/Skull/CC footer + More). Drag it anywhere; position and open/closed state
+  persist (it is intentionally NOT in `UISpecialFrames`, so Escape/loading screens don't close it).
 - **Move the main window:** left-click-drag the window background.
 - **Move the launcher button:** **right**-click-drag (left-click = Quick Create).
 - **Resize the main window:** mouse-wheel over it (scale clamped 0.5–2.0, persisted).

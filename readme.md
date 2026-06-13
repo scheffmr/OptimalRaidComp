@@ -42,7 +42,7 @@ The main window gained a top row and two toggles:
 * **Trade payout whisper:** Optional (checkbox) — when you place green-or-better items in a trade with a bot, ORC whispers the partner the payout (3× the items' vendor value) so the sale is instant. Verify with `/orc tradevalue`.
 * **Spec-confirm gating:** During summon/reinit, ORC waits for each bot to confirm its spec (`picking …`) before sending autogear, so gear is never applied for the wrong spec (it proceeds anyway after a short timeout).
 
-The **Commands** button opens a small, movable **ORC Commands** window (drag it anywhere; its position is remembered) with the live orders:
+The **Commands** button opens a small, movable **ORC Commands** window (drag it anywhere; its position is remembered, and it stays open until you close it — it won't vanish on loading screens) with the live orders:
 
 * **Behavior grid:** Order bots to **attack / stay / follow / flee**. The **all** and **tank** rows are shown by default; click **More** to reveal **heal / dps / melee / ranged** rows for role-targeted orders (e.g. only the tank attacks). Orders go to your raid in a raid, your party otherwise.
 * **Smart attack reset:** `stay` and `flee` lock bots in place until you tell them to `follow` again, so a plain `attack` won't re-engage them. The **attack** button handles this for you — it automatically sends `follow` first when it knows the role is parked, and **double-tapping attack** (within ~1.5s) forces that reset for any situation it didn't track.
