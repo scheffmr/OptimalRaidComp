@@ -25,7 +25,7 @@ Credits: Authors **Runshouse** and **Marco**, original design by **Xhausted**.
 | File | Purpose |
 |------|---------|
 | `OptimalRaidComp.toc` | Addon manifest. Declares `Interface: 30300`, `SavedVariables: OptimalRaidCompDB`, loads `Bindings.xml` then the `.lua`. |
-| `OptimalRaidComp.lua` | Entire addon — UI, data tables, summon state machine, bot commands, sorting, bot-control tab, trade payout. |
+| `OptimalRaidComp.lua` | Entire addon — UI, data tables, summon state machine, bot commands, sorting, bot control + Commands window, trade payout. |
 | `Bindings.xml` | Key bindings (toggle/summon/attack/follow/stay/RTSC); calls `ORC_*` globals by name. |
 | `readme.md` | User-facing documentation. |
 | `CLAUDE.md` | This file. |
@@ -41,7 +41,10 @@ Credits: Authors **Runshouse** and **Marco**, original design by **Xhausted**.
 ## How to use it in-game
 
 - Open/close UI: `/orc` slash command, or left-click the floating **ORC** launcher button.
-- **Tabs:** **Compose** (build/summon a comp) and **Control** (live bot orders).
+- **Main window** builds/summons a comp and holds the formation cycler, **Reinit**, **Loot FFA**,
+  the two toggles (auto-reinit, trade-whisper), and a **Commands** button.
+- **Commands** button opens a separate movable **ORC Commands** window (the behavior grid +
+  Summon/Release/Drink/Skull/CC footer + More). Drag it anywhere; position persists.
 - **Move the main window:** left-click-drag the window background.
 - **Move the launcher button:** **right**-click-drag (left-click = Quick Create).
 - **Resize the main window:** mouse-wheel over it (scale clamped 0.5–2.0, persisted).
@@ -82,11 +85,14 @@ Credits: Authors **Runshouse** and **Marco**, original design by **Xhausted**.
 - **Trade payout**: hidden-tooltip vendor-value scan (`GetItemInfo` has no sell price on
   3.3.5a) → whisper partner 3× value on `TRADE_PLAYER_ITEM_CHANGED`. Gated by `tradeWhisper`.
 - **UI build**: main frame (700×490), per-row dropdowns, bottom action row.
-- **Control tab** (`do` block): tab strip (`ShowTab` group-hides the compose widgets vs the
-  `controlPanel`), formation cycler, role×action grid (all+tank default; `More`/`Less` reveals
-  the rest via `RefreshControlLayout`, which repositions the footer), footer + Reinit/Loot +
-  checkboxes. **Attack-reset** lives in `GridClick`: tracks `lastOrder` per role and prepends
-  `follow` when it was stay/flee, and a double-tap of attack within 1.5s forces the reset.
+- **Bot control** (`do` block): no tabs — adds a top row to the main window (formation cycler +
+  Set/Check, **Reinit**, **Loot FFA**, **Commands**) and the two toggles on the size row.
+  **Commands** toggles a separate movable window `ORC_CommandsWindow` (`cmdWin`, position in
+  `cmdWinPos`) holding the role×action grid (all+tank default; `More`/`Less` reveals the rest via
+  `RefreshControlLayout`, which repositions the footer and resizes the window) and the
+  Summon/Release/Drink/Skull/CC footer. **Attack-reset** lives in `GridClick`: tracks `lastOrder`
+  per role and prepends `follow` when it was stay/flee, and a double-tap of attack within 1.5s
+  forces the reset.
 - **Launcher** + **`ApplyElvUISkin`** (optional, `pcall`-wrapped, runs once from `PLAYER_LOGIN`;
   also skins the control-tab buttons/checkboxes; no-ops without ElvUI; `.toc` `OptionalDeps: ElvUI`).
 - **Keybinding globals** (`ORC_Toggle`/`ORC_Summon`/…, `BINDING_*` labels) — the only
@@ -113,7 +119,7 @@ These are the exact strings ORC sends. **Warstorm-specific — preserve verbatim
 | `nc +worldbuff` | RAID / PARTY | Apply world buffs to the group. |
 | `autogear` | RAID / PARTY | Re-gear the whole group. |
 
-### Live bot orders (Control tab / keybinds, via `SendBotOrder` → RAID or PARTY)
+### Live bot orders (Commands window / main window / keybinds, via `SendBotOrder` → RAID or PARTY)
 Bots reply to spec whispers with `picking <spec>` (listened for by `confirmFrame`).
 
 | Command | Purpose |
@@ -175,11 +181,13 @@ Bots reply to spec whispers with `picking <spec>` (listened for by `confirmFrame
 - [x] **Version sync** — `.lua`, `.toc`, and `readme.md` are all on v2.8; readme "What's New"
       refreshed with a v2.8 section.
 - [ ] **Merge WarstormBotManager → ORC (bot control)** — committed in stages: scheduler +
-      spec-confirm gating + loot + reinit/level-up; trade payout; Compose/Control tabs + grid +
-      attack-reset; keybindings (`Bindings.xml`); docs. **Pending in-game verification, then
-      bump `.lua`/`.toc`/`readme.md` to v2.9.** Things to watch in testing:
+      spec-confirm gating + loot + reinit/level-up; trade payout; main-window controls (formation,
+      Reinit, Loot FFA, toggles, Commands button) + a movable `ORC_CommandsWindow` (grid + footer
+      + More) + attack-reset; keybindings (`Bindings.xml`); docs. **Pending in-game verification,
+      then bump `.lua`/`.toc`/`readme.md` to v2.9.** Things to watch in testing:
   - RAID-channel bot orders actually reach bots in 10/25-man (WBM was party-only — fall back to
     PARTY if Warstorm ignores RAID-channel orders).
-  - Compose tab unchanged vs. before (group-hide/show; window grew 465→490 for the tab strip).
+  - Main window unchanged below the new top row (window grew 465→490; list start moved to -70).
+  - Commands window opens/moves/persists position; More/Less expands rows and resizes the window.
   - Spec-confirm gating doesn't hang summon if `picking` replies never arrive (6s timeout gears anyway).
   - Disable the old `WarstormBotManager` addon so its keybinds/handlers don't double-fire.

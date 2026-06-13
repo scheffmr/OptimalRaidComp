@@ -30,18 +30,23 @@ A lightweight, powerful composition manager designed specifically for World of W
 
 ---
 
-## Bot Control (Control tab)
+## Bot Control
 
-The window now has two tabs: **Compose** (build & summon a comp, as above) and **Control** for live, in-the-field bot orders. This folds in the functionality of the now-discontinued *Warstorm Bot Manager* addon — disable that one to avoid duplicate keybinds.
+ORC now also covers live, in-the-field bot control, folding in the functionality of the now-discontinued *Warstorm Bot Manager* addon — disable that one to avoid duplicate keybinds.
 
-* **Behavior grid:** Order bots to **attack / stay / follow / flee**. The **all** and **tank** rows are shown by default; click **More** to reveal **heal / dps / melee / ranged** rows for role-targeted orders (e.g. only the tank attacks). Orders go to your raid in a raid, your party otherwise.
-* **Smart attack reset:** `stay` and `flee` lock bots in place until you tell them to `follow` again, so a plain `attack` won't re-engage them. The **attack** button handles this for you — it automatically sends `follow` first when it knows the role is parked, and **double-tapping attack** (within ~1.5s) forces that reset for any situation it didn't track.
+The main window gained a top row and two toggles:
+
 * **Formations:** Cycle through the 8 bot formations (Shield, Chaos, Circle, Line, Melee, Near, Queue, Arrow) and **Set** or **Check** the active one.
-* **Footer actions:** **Summon** (teleport bots to you), **Release**, **Drink** (rest), **Skull** (marks + attacks the skull target), and **CC** (crowd-controls the moon target).
 * **Reinit & Loot:** **Reinit** re-runs `init=epic` + spec + autogear on the current bots; **Loot FFA** sets the group to Free For All with an Epic threshold (also applied automatically on summon).
 * **Auto-reinit on level up:** Optional (checkbox) — when you level, your bots re-init and re-gear automatically, firing a few seconds after combat ends so a bot still fighting isn't skipped.
 * **Trade payout whisper:** Optional (checkbox) — when you place green-or-better items in a trade with a bot, ORC whispers the partner the payout (3× the items' vendor value) so the sale is instant. Verify with `/orc tradevalue`.
-* **Spec-confirm gating:** During summon/reinit, ORC now waits for each bot to confirm its spec (`picking …`) before sending autogear, so gear is never applied for the wrong spec (it proceeds anyway after a short timeout).
+* **Spec-confirm gating:** During summon/reinit, ORC waits for each bot to confirm its spec (`picking …`) before sending autogear, so gear is never applied for the wrong spec (it proceeds anyway after a short timeout).
+
+The **Commands** button opens a small, movable **ORC Commands** window (drag it anywhere; its position is remembered) with the live orders:
+
+* **Behavior grid:** Order bots to **attack / stay / follow / flee**. The **all** and **tank** rows are shown by default; click **More** to reveal **heal / dps / melee / ranged** rows for role-targeted orders (e.g. only the tank attacks). Orders go to your raid in a raid, your party otherwise.
+* **Smart attack reset:** `stay` and `flee` lock bots in place until you tell them to `follow` again, so a plain `attack` won't re-engage them. The **attack** button handles this for you — it automatically sends `follow` first when it knows the role is parked, and **double-tapping attack** (within ~1.5s) forces that reset for any situation it didn't track.
+* **Footer actions:** **Summon** (teleport bots to you), **Release**, **Drink** (rest), **Skull** (marks + attacks the skull target), and **CC** (crowd-controls the moon target).
 
 ### Slash commands & keybindings
 

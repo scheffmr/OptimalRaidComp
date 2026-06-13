@@ -20,12 +20,12 @@ OptimalRaidCompDB = OptimalRaidCompDB or {
 -- gain the new keys without clobbering the user's data.
 do
     local db = OptimalRaidCompDB
-    if db.selectedTab == nil then db.selectedTab = 1 end
     if db.selectedFormation == nil then db.selectedFormation = "Shield" end
     if db.selectedFormationIndex == nil then db.selectedFormationIndex = 1 end
     if db.controlExpanded == nil then db.controlExpanded = false end
     if db.autoLevelUp == nil then db.autoLevelUp = true end
     if db.tradeWhisper == nil then db.tradeWhisper = true end
+    if db.cmdWinPos == nil then db.cmdWinPos = { x = 300, y = 0 } end
 end
 
 local activeSummonFrame = nil
@@ -1130,18 +1130,10 @@ delBtn:SetScript("OnClick", function()
     if OptimalRaidCompDB.currentComp then OptimalRaidCompDB.comps[OptimalRaidCompDB.currentComp] = nil; OptimalRaidCompDB.currentComp = nil; UIDropDownMenu_SetText(compDD, "Select Profile"); RefreshCompList() end
 end)
 
--- ==================== CONTROL TAB ====================
-local composeTab, controlTab, controlPanel
-local ShowTab, RefreshControlLayout
+-- ==================== BOT CONTROL ====================
 local controlButtons, controlChecks = {}, {}
-
--- Compose-tab widgets toggled as a group when switching tabs (re-parenting the
--- existing content is risky, so the two views are shown/hidden by group instead).
-local composeWidgets = {
-    scrollContainer, sizeLabel, sizeDD, compLabel, compDD,
-    saveBtn, saveAsBtn, renBtn, delBtn,
-    checkBtn, zoneBtn, pushSpecBtn, pushGearBtn, pushBuffBtn, sortBtn, summonBtn,
-}
+local cmdWin, cmdClose      -- floating Commands window + its close button
+local RefreshControlLayout
 
 do
     local function CBtn(parent, text, w, h)
@@ -1151,26 +1143,21 @@ do
         return b
     end
 
-    -- Tab strip below the title
-    composeTab = CBtn(frame, "Compose", 100, 22); composeTab:SetPoint("TOP", -52, -40)
-    controlTab = CBtn(frame, "Control", 100, 22); controlTab:SetPoint("TOP", 52, -40)
-
-    -- Control content panel (hidden until its tab is selected)
-    controlPanel = CreateFrame("Frame", nil, frame)
-    controlPanel:SetPoint("TOPLEFT", 15, -68)
-    controlPanel:SetPoint("BOTTOMRIGHT", -15, 15)
-    controlPanel:Hide()
-
-    -- --- Formation row ---
-    local formLabel = controlPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    formLabel:SetPoint("TOPLEFT", 8, -12); formLabel:SetText("Formation:")
-    local prevBtn  = CBtn(controlPanel, "<", 24, 22); prevBtn:SetPoint("TOPLEFT", 82, -10)
-    local formText = controlPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    formText:SetPoint("TOPLEFT", 110, -14); formText:SetWidth(86); formText:SetJustifyH("CENTER")
-    local nextBtn   = CBtn(controlPanel, ">", 24, 22);     nextBtn:SetPoint("TOPLEFT", 200, -10)
-    local setForm   = CBtn(controlPanel, "Set", 50, 22);   setForm:SetPoint("TOPLEFT", 232, -10)
-    local checkForm = CBtn(controlPanel, "Check", 54, 22); checkForm:SetPoint("TOPLEFT", 286, -10)
-    local moreBtn   = CBtn(controlPanel, "More", 60, 22);  moreBtn:SetPoint("TOPLEFT", 350, -10)
+    ------------------------------------------------------------------
+    -- Main-window controls: a top row (formation + reinit/loot + the button
+    -- that opens the Commands window) and the two toggles on the size row.
+    ------------------------------------------------------------------
+    local formLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    formLabel:SetPoint("TOPLEFT", 18, -46); formLabel:SetText("Formation:")
+    local prevBtn  = CBtn(frame, "<", 24, 22);         prevBtn:SetPoint("TOPLEFT", 88, -44)
+    local formText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    formText:SetPoint("TOPLEFT", 114, -47); formText:SetWidth(88); formText:SetJustifyH("CENTER")
+    local nextBtn   = CBtn(frame, ">", 24, 22);        nextBtn:SetPoint("TOPLEFT", 206, -44)
+    local setForm   = CBtn(frame, "Set", 44, 22);      setForm:SetPoint("TOPLEFT", 234, -44)
+    local checkForm = CBtn(frame, "Check", 52, 22);    checkForm:SetPoint("TOPLEFT", 280, -44)
+    local reinitBtn = CBtn(frame, "Reinit", 60, 22);   reinitBtn:SetPoint("TOPLEFT", 344, -44)
+    local lootBtn   = CBtn(frame, "Loot FFA", 70, 22); lootBtn:SetPoint("TOPLEFT", 406, -44)
+    local cmdBtn    = CBtn(frame, "Commands", 90, 22); cmdBtn:SetPoint("TOPLEFT", 480, -44)
 
     local function SetFormText() formText:SetText(OptimalRaidCompDB.selectedFormation or formations[1].name) end
     local function CycleFormation(step)
@@ -1182,13 +1169,55 @@ do
     prevBtn:SetScript("OnClick", function() CycleFormation(-1) end)
     nextBtn:SetScript("OnClick", function() CycleFormation(1) end)
     setForm:SetScript("OnClick", function()
-        local i = OptimalRaidCompDB.selectedFormationIndex or 1
-        SendBotOrder("formation "..formations[i].command)
+        SendBotOrder("formation "..formations[OptimalRaidCompDB.selectedFormationIndex or 1].command)
     end)
     checkForm:SetScript("OnClick", function() SendBotOrder("formation") end)
     SetFormText()
+    reinitBtn:SetScript("OnClick", function() ReinitBots(BuildCompFromSlots()) end)
+    lootBtn:SetScript("OnClick", function() SetGroupLoot() end)
 
-    -- --- Behavior grid (rows = roles, columns = actions) ---
+    -- Two toggles, parked on the right of the size row.
+    local function CChk(parent, label, px, py, getv, setv)
+        local c = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
+        c:SetSize(24, 24); c:SetPoint("BOTTOMLEFT", px, py); c:SetChecked(getv())
+        local t = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        t:SetPoint("LEFT", c, "RIGHT", 2, 0); t:SetText(label)
+        c:SetScript("OnClick", function(self) setv(self:GetChecked() and true or false) end)
+        table.insert(controlChecks, c)
+    end
+    CChk(frame, "Auto-reinit on level up", 300, 88,
+        function() return OptimalRaidCompDB.autoLevelUp end,
+        function(v) OptimalRaidCompDB.autoLevelUp = v end)
+    CChk(frame, "Trade payout whisper", 500, 88,
+        function() return OptimalRaidCompDB.tradeWhisper end,
+        function(v) OptimalRaidCompDB.tradeWhisper = v end)
+
+    ------------------------------------------------------------------
+    -- Floating Commands window: the behavior grid + footer actions. Movable
+    -- and toggled by the main window's "Commands" button (like the launcher).
+    ------------------------------------------------------------------
+    cmdWin = CreateFrame("Frame", "ORC_CommandsWindow", UIParent)
+    cmdWin:SetSize(360, 252)
+    cmdWin:SetPoint("CENTER", OptimalRaidCompDB.cmdWinPos.x, OptimalRaidCompDB.cmdWinPos.y)
+    cmdWin:SetMovable(true); cmdWin:EnableMouse(true); cmdWin:RegisterForDrag("LeftButton")
+    cmdWin:SetScript("OnDragStart", cmdWin.StartMoving)
+    cmdWin:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        local _, _, _, x, y = self:GetPoint()
+        OptimalRaidCompDB.cmdWinPos = { x = x, y = y }
+    end)
+    cmdWin:SetBackdrop({bgFile="Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border", tile=true, tileSize=32, edgeSize=32, insets={left=11, right=12, top=12, bottom=11}})
+    cmdWin:SetBackdropColor(0, 0, 0, 1)
+    cmdWin:Hide()
+    tinsert(UISpecialFrames, "ORC_CommandsWindow")
+
+    cmdClose = CreateFrame("Button", nil, cmdWin, "UIPanelCloseButton"); cmdClose:SetPoint("TOPRIGHT", -4, -4)
+    local cmdTitle = cmdWin:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    cmdTitle:SetPoint("TOPLEFT", 14, -12); cmdTitle:SetText("ORC Commands")
+    local moreBtn = CBtn(cmdWin, "More", 60, 20); moreBtn:SetPoint("TOPRIGHT", -28, -10)
+
+    cmdBtn:SetScript("OnClick", function() if cmdWin:IsShown() then cmdWin:Hide() else cmdWin:Show() end end)
+
     -- Track the last order ORC sent each role so 'attack' can break a stay/flee lock
     -- by sending 'follow' first; a double-tap of attack within 1.5s forces the same
     -- reset manually (for locks ORC didn't set, e.g. via keybind or server flee).
@@ -1212,12 +1241,11 @@ do
         lastOrder[key] = action
     end
 
-    local rowStart, rowH = -46, 26
+    local rowStart, rowH = -52, 26
     local controlRows = {}
     for r, role in ipairs(roles) do
-        local rf = CreateFrame("Frame", nil, controlPanel)
-        rf:SetSize(330, 24)
-        rf:SetPoint("TOPLEFT", 8, rowStart - (r - 1) * rowH)
+        local rf = CreateFrame("Frame", nil, cmdWin)
+        rf:SetSize(330, 24); rf:SetPoint("TOPLEFT", 14, rowStart - (r - 1) * rowH)
         local lbl = rf:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         lbl:SetPoint("LEFT", 0, 0); lbl:SetWidth(46); lbl:SetText(role.label)
         for c, action in ipairs(actions) do
@@ -1230,70 +1258,33 @@ do
         controlRows[r] = rf
     end
 
-    -- --- Footer (repositioned by RefreshControlLayout under the last visible row) ---
-    local controlFooter = CreateFrame("Frame", nil, controlPanel)
-    controlFooter:SetSize(330, 120)
+    local cmdFooter = CreateFrame("Frame", nil, cmdWin); cmdFooter:SetSize(330, 24)
     for i, item in ipairs(footer) do
-        local b = CBtn(controlFooter, item.label, 58, 22)
+        local b = CBtn(cmdFooter, item.label, 58, 22)
         b:SetPoint("TOPLEFT", (i - 1) * 60, 0); b:SetNormalFontObject("GameFontNormalSmall")
         if item.command then
             local cmd = item.command
             b:SetScript("OnClick", function() SendBotOrder(cmd) end)
         elseif item.label == "Skull" then
-            b:SetScript("OnClick", function()
-                SendBotOrder("rti skull"); SendBotOrder("attack rti target")
-            end)
+            b:SetScript("OnClick", function() SendBotOrder("rti skull"); SendBotOrder("attack rti target") end)
         end
     end
-
-    local reinitBtn = CBtn(controlFooter, "Reinit", 60, 22); reinitBtn:SetPoint("TOPLEFT", 0, -28)
-    reinitBtn:SetScript("OnClick", function() ReinitBots(BuildCompFromSlots()) end)
-    local lootBtn = CBtn(controlFooter, "Loot FFA", 70, 22); lootBtn:SetPoint("TOPLEFT", 64, -28)
-    lootBtn:SetScript("OnClick", function() SetGroupLoot() end)
-
-    local function CChk(label, y, getv, setv)
-        local c = CreateFrame("CheckButton", nil, controlFooter, "UICheckButtonTemplate")
-        c:SetSize(24, 24); c:SetPoint("TOPLEFT", 0, y); c:SetChecked(getv())
-        local t = controlFooter:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        t:SetPoint("LEFT", c, "RIGHT", 2, 0); t:SetText(label)
-        c:SetScript("OnClick", function(self) setv(self:GetChecked() and true or false) end)
-        table.insert(controlChecks, c)
-    end
-    CChk("Auto-reinit on level up", -58,
-        function() return OptimalRaidCompDB.autoLevelUp end,
-        function(v) OptimalRaidCompDB.autoLevelUp = v end)
-    CChk("Trade payout whisper", -82,
-        function() return OptimalRaidCompDB.tradeWhisper end,
-        function(v) OptimalRaidCompDB.tradeWhisper = v end)
 
     function RefreshControlLayout()
         local expanded = OptimalRaidCompDB.controlExpanded
         for r = 3, #roles do if expanded then controlRows[r]:Show() else controlRows[r]:Hide() end end
         local visRoles = expanded and #roles or 2
-        controlFooter:ClearAllPoints()
-        controlFooter:SetPoint("TOPLEFT", controlPanel, "TOPLEFT", 8, rowStart - visRoles * rowH - 12)
+        local footerY = rowStart - visRoles * rowH - 10
+        cmdFooter:ClearAllPoints()
+        cmdFooter:SetPoint("TOPLEFT", cmdWin, "TOPLEFT", 14, footerY)
+        cmdWin:SetHeight(math.abs(footerY) + 22 + 16)
         moreBtn:SetText(expanded and "Less" or "More")
     end
     moreBtn:SetScript("OnClick", function()
         OptimalRaidCompDB.controlExpanded = not OptimalRaidCompDB.controlExpanded
         RefreshControlLayout()
     end)
-
-    function ShowTab(idx)
-        OptimalRaidCompDB.selectedTab = idx
-        if idx == 2 then
-            for _, w in ipairs(composeWidgets) do w:Hide() end
-            controlPanel:Show(); RefreshControlLayout()
-            composeTab:Enable(); controlTab:Disable()
-        else
-            controlPanel:Hide()
-            for _, w in ipairs(composeWidgets) do w:Show() end
-            UpdateVisibleRows()
-            composeTab:Disable(); controlTab:Enable()
-        end
-    end
-    composeTab:SetScript("OnClick", function() ShowTab(1) end)
-    controlTab:SetScript("OnClick", function() ShowTab(2) end)
+    RefreshControlLayout()
 end
 
 -- ==================== LAUNCHER ====================
@@ -1361,9 +1352,14 @@ local function ApplyElvUISkin()
         btn(checkBtn); btn(zoneBtn); btn(pushSpecBtn); btn(pushGearBtn)
         btn(pushBuffBtn); btn(sortBtn); btn(summonBtn)
 
-        -- Control tab (tabs, formation/grid/footer buttons, checkboxes)
+        -- Bot control (formation/reinit/loot/commands + grid/footer buttons, toggles)
         for _, b in ipairs(controlButtons) do btn(b) end
         for _, c in ipairs(controlChecks) do chk(c) end
+        if cmdWin then
+            if cmdWin.StripTextures then cmdWin:StripTextures() end
+            if cmdWin.SetTemplate then cmdWin:SetTemplate("Transparent") end
+        end
+        if cmdClose and S.HandleCloseButton then S:HandleCloseButton(cmdClose) end
 
         -- Scrollbar
         local sb = _G["OptimalRaidCompFauxScrollScrollBar"]
@@ -1421,7 +1417,6 @@ l:SetScript("OnEvent", function()
 
     RefreshSizeDD(); RefreshCompList(); UpdateVisibleRows()
     ApplyElvUISkin()
-    ShowTab(OptimalRaidCompDB.selectedTab or 1)
 end)
 
 -- ==================== KEYBINDINGS ====================
