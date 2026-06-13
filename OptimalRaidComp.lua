@@ -4,7 +4,8 @@
 --           Overwrite-on-Save profiles, optional ElvUI skinning.
 
 local PADDING, SLOT_HEIGHT = 10, 30
-local CLASS_COL_WIDTH, SPEC_COL_WIDTH = 100, 90 
+local CLASS_COL_WIDTH, SPEC_COL_WIDTH = 100, 90
+local VISIBLE_ROWS, MAX_ROWS, ROW_HEIGHT = 10, 25, 30
 
 -- ==================== SAVED VARIABLES ====================
 OptimalRaidCompDB = OptimalRaidCompDB or {
@@ -32,6 +33,16 @@ local activeSortFrame = nil
 local reinitPending = false      -- a re-init requested during combat; runs on regen
 local pendingReinitComp = nil    -- comp snapshot to re-init once combat ends
 local slots -- row data, built in the GUI section
+
+-- Snapshot the visible UI rows into a comp table (same shape SummonComp/PushSpecs use).
+-- Defined early so control-tab buttons and the level-up handler can reach it.
+local function BuildCompFromSlots()
+    local temp = { slots = {} }
+    for j = 1, MAX_ROWS do
+        temp.slots[j] = { class=slots[j].class, spec=slots[j].spec, opt1=slots[j].opt1, opt2=slots[j].opt2, isPlayer=slots[j].isPlayer }
+    end
+    return temp
+end
 
 -- ==================== DATA TABLES & MAPPING ====================
 local classes = { "Warrior", "Paladin", "Hunter", "Rogue", "Priest", "Shaman", "Mage", "Warlock", "Druid", "DK" }
@@ -830,7 +841,7 @@ end)
 
 -- ==================== GUI ====================
 local frame = CreateFrame("Frame", "OptimalRaidCompFrame", UIParent)
-frame:SetSize(700, 465)
+frame:SetSize(700, 490)
 frame:SetPoint("CENTER"); frame:SetMovable(true); frame:EnableMouse(true); frame:EnableMouseWheel(true); frame:RegisterForDrag("LeftButton")
 frame:SetScript("OnDragStart", frame.StartMoving); frame:SetScript("OnDragStop", frame.StopMovingOrSizing); frame:Hide()
 
@@ -851,8 +862,7 @@ closeBtn:SetPoint("TOPRIGHT", -4, -4)
 local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
 title:SetPoint("TOP", 0, -15); title:SetText("Optimal Raid Comp Manager")
 
-local VISIBLE_ROWS, MAX_ROWS, ROW_HEIGHT = 10, 25, 30
-local scrollContainer = CreateFrame("Frame", nil, frame); scrollContainer:SetPoint("TOPLEFT", 15, -45); scrollContainer:SetPoint("BOTTOMRIGHT", -35, 120) 
+local scrollContainer = CreateFrame("Frame", nil, frame); scrollContainer:SetPoint("TOPLEFT", 15, -70); scrollContainer:SetPoint("BOTTOMRIGHT", -35, 120)
 local fauxScroll = CreateFrame("ScrollFrame", "OptimalRaidCompFauxScroll", scrollContainer, "FauxScrollFrameTemplate")
 fauxScroll:SetPoint("TOPLEFT", 0, 0); fauxScroll:SetPoint("BOTTOMRIGHT", -25, 0)
 
@@ -1120,6 +1130,172 @@ delBtn:SetScript("OnClick", function()
     if OptimalRaidCompDB.currentComp then OptimalRaidCompDB.comps[OptimalRaidCompDB.currentComp] = nil; OptimalRaidCompDB.currentComp = nil; UIDropDownMenu_SetText(compDD, "Select Profile"); RefreshCompList() end
 end)
 
+-- ==================== CONTROL TAB ====================
+local composeTab, controlTab, controlPanel
+local ShowTab, RefreshControlLayout
+local controlButtons, controlChecks = {}, {}
+
+-- Compose-tab widgets toggled as a group when switching tabs (re-parenting the
+-- existing content is risky, so the two views are shown/hidden by group instead).
+local composeWidgets = {
+    scrollContainer, sizeLabel, sizeDD, compLabel, compDD,
+    saveBtn, saveAsBtn, renBtn, delBtn,
+    checkBtn, zoneBtn, pushSpecBtn, pushGearBtn, pushBuffBtn, sortBtn, summonBtn,
+}
+
+do
+    local function CBtn(parent, text, w, h)
+        local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+        b:SetSize(w, h); b:SetText(text)
+        table.insert(controlButtons, b)
+        return b
+    end
+
+    -- Tab strip below the title
+    composeTab = CBtn(frame, "Compose", 100, 22); composeTab:SetPoint("TOP", -52, -40)
+    controlTab = CBtn(frame, "Control", 100, 22); controlTab:SetPoint("TOP", 52, -40)
+
+    -- Control content panel (hidden until its tab is selected)
+    controlPanel = CreateFrame("Frame", nil, frame)
+    controlPanel:SetPoint("TOPLEFT", 15, -68)
+    controlPanel:SetPoint("BOTTOMRIGHT", -15, 15)
+    controlPanel:Hide()
+
+    -- --- Formation row ---
+    local formLabel = controlPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    formLabel:SetPoint("TOPLEFT", 8, -12); formLabel:SetText("Formation:")
+    local prevBtn  = CBtn(controlPanel, "<", 24, 22); prevBtn:SetPoint("TOPLEFT", 82, -10)
+    local formText = controlPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    formText:SetPoint("TOPLEFT", 110, -14); formText:SetWidth(86); formText:SetJustifyH("CENTER")
+    local nextBtn   = CBtn(controlPanel, ">", 24, 22);     nextBtn:SetPoint("TOPLEFT", 200, -10)
+    local setForm   = CBtn(controlPanel, "Set", 50, 22);   setForm:SetPoint("TOPLEFT", 232, -10)
+    local checkForm = CBtn(controlPanel, "Check", 54, 22); checkForm:SetPoint("TOPLEFT", 286, -10)
+    local moreBtn   = CBtn(controlPanel, "More", 60, 22);  moreBtn:SetPoint("TOPLEFT", 350, -10)
+
+    local function SetFormText() formText:SetText(OptimalRaidCompDB.selectedFormation or formations[1].name) end
+    local function CycleFormation(step)
+        local i = ((OptimalRaidCompDB.selectedFormationIndex or 1) - 1 + step) % #formations + 1
+        OptimalRaidCompDB.selectedFormationIndex = i
+        OptimalRaidCompDB.selectedFormation = formations[i].name
+        SetFormText()
+    end
+    prevBtn:SetScript("OnClick", function() CycleFormation(-1) end)
+    nextBtn:SetScript("OnClick", function() CycleFormation(1) end)
+    setForm:SetScript("OnClick", function()
+        local i = OptimalRaidCompDB.selectedFormationIndex or 1
+        SendBotOrder("formation "..formations[i].command)
+    end)
+    checkForm:SetScript("OnClick", function() SendBotOrder("formation") end)
+    SetFormText()
+
+    -- --- Behavior grid (rows = roles, columns = actions) ---
+    -- Track the last order ORC sent each role so 'attack' can break a stay/flee lock
+    -- by sending 'follow' first; a double-tap of attack within 1.5s forces the same
+    -- reset manually (for locks ORC didn't set, e.g. via keybind or server flee).
+    local lastOrder, lastAttackAt = {}, {}
+    local function GridClick(role, action)
+        local key = role.label
+        if action == "attack" then
+            local now = GetTime()
+            local stuck = (lastOrder[key] == "stay" or lastOrder[key] == "flee")
+            local doubleTap = lastAttackAt[key] and (now - lastAttackAt[key] < 1.5)
+            if stuck or doubleTap then
+                SendBotOrder(role.prefix.."follow")
+                After(0.3, function() SendBotOrder(role.prefix.."attack") end)
+            else
+                SendBotOrder(role.prefix.."attack")
+            end
+            lastAttackAt[key] = now
+        else
+            SendBotOrder(role.prefix..action)
+        end
+        lastOrder[key] = action
+    end
+
+    local rowStart, rowH = -46, 26
+    local controlRows = {}
+    for r, role in ipairs(roles) do
+        local rf = CreateFrame("Frame", nil, controlPanel)
+        rf:SetSize(330, 24)
+        rf:SetPoint("TOPLEFT", 8, rowStart - (r - 1) * rowH)
+        local lbl = rf:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        lbl:SetPoint("LEFT", 0, 0); lbl:SetWidth(46); lbl:SetText(role.label)
+        for c, action in ipairs(actions) do
+            local b = CreateFrame("Button", nil, rf, "UIPanelButtonTemplate")
+            b:SetSize(64, 22); b:SetPoint("LEFT", 50 + (c - 1) * 68, 0)
+            b:SetText(action); b:SetNormalFontObject("GameFontNormalSmall")
+            b:SetScript("OnClick", function() GridClick(role, action) end)
+            table.insert(controlButtons, b)
+        end
+        controlRows[r] = rf
+    end
+
+    -- --- Footer (repositioned by RefreshControlLayout under the last visible row) ---
+    local controlFooter = CreateFrame("Frame", nil, controlPanel)
+    controlFooter:SetSize(330, 120)
+    for i, item in ipairs(footer) do
+        local b = CBtn(controlFooter, item.label, 58, 22)
+        b:SetPoint("TOPLEFT", (i - 1) * 60, 0); b:SetNormalFontObject("GameFontNormalSmall")
+        if item.command then
+            local cmd = item.command
+            b:SetScript("OnClick", function() SendBotOrder(cmd) end)
+        elseif item.label == "Skull" then
+            b:SetScript("OnClick", function()
+                SendBotOrder("rti skull"); SendBotOrder("attack rti target")
+            end)
+        end
+    end
+
+    local reinitBtn = CBtn(controlFooter, "Reinit", 60, 22); reinitBtn:SetPoint("TOPLEFT", 0, -28)
+    reinitBtn:SetScript("OnClick", function() ReinitBots(BuildCompFromSlots()) end)
+    local lootBtn = CBtn(controlFooter, "Loot FFA", 70, 22); lootBtn:SetPoint("TOPLEFT", 64, -28)
+    lootBtn:SetScript("OnClick", function() SetGroupLoot() end)
+
+    local function CChk(label, y, getv, setv)
+        local c = CreateFrame("CheckButton", nil, controlFooter, "UICheckButtonTemplate")
+        c:SetSize(24, 24); c:SetPoint("TOPLEFT", 0, y); c:SetChecked(getv())
+        local t = controlFooter:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        t:SetPoint("LEFT", c, "RIGHT", 2, 0); t:SetText(label)
+        c:SetScript("OnClick", function(self) setv(self:GetChecked() and true or false) end)
+        table.insert(controlChecks, c)
+    end
+    CChk("Auto-reinit on level up", -58,
+        function() return OptimalRaidCompDB.autoLevelUp end,
+        function(v) OptimalRaidCompDB.autoLevelUp = v end)
+    CChk("Trade payout whisper", -82,
+        function() return OptimalRaidCompDB.tradeWhisper end,
+        function(v) OptimalRaidCompDB.tradeWhisper = v end)
+
+    function RefreshControlLayout()
+        local expanded = OptimalRaidCompDB.controlExpanded
+        for r = 3, #roles do if expanded then controlRows[r]:Show() else controlRows[r]:Hide() end end
+        local visRoles = expanded and #roles or 2
+        controlFooter:ClearAllPoints()
+        controlFooter:SetPoint("TOPLEFT", controlPanel, "TOPLEFT", 8, rowStart - visRoles * rowH - 12)
+        moreBtn:SetText(expanded and "Less" or "More")
+    end
+    moreBtn:SetScript("OnClick", function()
+        OptimalRaidCompDB.controlExpanded = not OptimalRaidCompDB.controlExpanded
+        RefreshControlLayout()
+    end)
+
+    function ShowTab(idx)
+        OptimalRaidCompDB.selectedTab = idx
+        if idx == 2 then
+            for _, w in ipairs(composeWidgets) do w:Hide() end
+            controlPanel:Show(); RefreshControlLayout()
+            composeTab:Enable(); controlTab:Disable()
+        else
+            controlPanel:Hide()
+            for _, w in ipairs(composeWidgets) do w:Show() end
+            UpdateVisibleRows()
+            composeTab:Disable(); controlTab:Enable()
+        end
+    end
+    composeTab:SetScript("OnClick", function() ShowTab(1) end)
+    controlTab:SetScript("OnClick", function() ShowTab(2) end)
+end
+
 -- ==================== LAUNCHER ====================
 local launch = CreateFrame("Button", "ORC_Launcher", UIParent)
 launch:SetSize(110, 60); launch:SetPoint("CENTER", OptimalRaidCompDB.buttonPos.x, OptimalRaidCompDB.buttonPos.y)
@@ -1185,6 +1361,10 @@ local function ApplyElvUISkin()
         btn(checkBtn); btn(zoneBtn); btn(pushSpecBtn); btn(pushGearBtn)
         btn(pushBuffBtn); btn(sortBtn); btn(summonBtn)
 
+        -- Control tab (tabs, formation/grid/footer buttons, checkboxes)
+        for _, b in ipairs(controlButtons) do btn(b) end
+        for _, c in ipairs(controlChecks) do chk(c) end
+
         -- Scrollbar
         local sb = _G["OptimalRaidCompFauxScrollScrollBar"]
         if sb and S.HandleScrollBar then S:HandleScrollBar(sb) end
@@ -1201,15 +1381,6 @@ local function ApplyElvUISkin()
     else
         print("|cffff0000[ORC] ElvUI skin failed, using default look: " .. tostring(err) .. "|r")
     end
-end
-
--- Snapshot the visible UI rows into a comp table (same shape SummonComp/PushSpecs use).
-local function BuildCompFromSlots()
-    local temp = { slots = {} }
-    for j = 1, MAX_ROWS do
-        temp.slots[j] = { class=slots[j].class, spec=slots[j].spec, opt1=slots[j].opt1, opt2=slots[j].opt2, isPlayer=slots[j].isPlayer }
-    end
-    return temp
 end
 
 -- Auto-reinit on level up + the post-combat retry for a reinit deferred in combat.
@@ -1250,6 +1421,7 @@ l:SetScript("OnEvent", function()
 
     RefreshSizeDD(); RefreshCompList(); UpdateVisibleRows()
     ApplyElvUISkin()
+    ShowTab(OptimalRaidCompDB.selectedTab or 1)
 end)
 
 SLASH_ORC1 = "/orc"
