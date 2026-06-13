@@ -18,7 +18,7 @@ spec-assigns, gears, buffs, and sorts a full party/raid of bots without manual c
 This is a fork. The original thread is:
 - https://forum.warstorm.org/showthread.php?tid=73
 
-Credits: Author **Runshouse**, original design by **Xhausted**.
+Credits: Authors **Runshouse** and **Marco**, original design by **Xhausted**.
 
 ## Files
 
@@ -29,8 +29,7 @@ Credits: Author **Runshouse**, original design by **Xhausted**.
 | `readme.md` | User-facing documentation. |
 | `CLAUDE.md` | This file. |
 
-> **Version note:** `.lua` header and `.toc` are now both **v2.7**. `readme.md` narrative still
-> references v2.4 — update its "What's New" section when doing the readme pass.
+> **Version note:** `.lua` header, `.toc`, and `readme.md` are all on **v2.8**.
 
 ## How to use it in-game
 
@@ -46,7 +45,8 @@ Credits: Author **Runshouse**, original design by **Xhausted**.
 - **`STRAT_MAP`** (~line 33): translates friendly UI labels (`kings`, `devotion`, `fire res`…)
   into Warstorm strategy tokens (`bstats`, `barmor`, `rfire`…).
 - **`TOTEM_TOOLTIPS`** (~line 51) + **`GetOptionsForClassSpec`** (~line 61): context-aware,
-  spec-dependent buff/aura/totem dropdown options (Paladin, Shaman, Warrior, Priest).
+  spec-dependent buff/aura/totem dropdown options (Paladin, Shaman, Priest). Warriors have no
+  options dropdown — the server has no shout strategy tokens.
 - **`PushAutogear` / `PushWorldBuffs`** (~line 235): manual party/raid broadcast actions.
 - **Spec push helpers** (~line 272, ~314): whisper per-bot talent spec + strategy/totems.
 - **`SummonComp` / summon state machine** (~line 367): an `OnUpdate` frame driving phases
@@ -105,24 +105,24 @@ These are the exact strings ORC sends. **Warstorm-specific — preserve verbatim
     functions (were leaking as globals; `slots` is a high-collision name with other addons).
   - STOP button now aborts during the initial 5s "remove bots" wait (previously the
     pre-summon watch frame wasn't tracked, so STOP did nothing and summoning fired anyway).
-- [ ] **Bug pass — remaining findings (not yet fixed):**
-  - **Same-class spec ambiguity:** spec/buff assignment matches bots to slots by *class only*
-    (`PushSpecs`, `SummonComp.Finalize`, `PushSingleSpec`). With two same-class bots of
-    different specs (e.g. Holy + Ret Paladin), which bot gets which spec depends on roster
-    order and can be swapped. Needs a deterministic assignment (e.g. order-stable pairing).
-  - **Warrior shout options have no `STRAT_MAP` entry:** `battle`/`commanding` fall through to
-    `nc +battle` / `nc +commanding`. Confirm Warstorm accepts those tokens, or map them.
-  - **Overwriting "Default 5-Man" in a non-5 size** saves `size` = current raidSize, but login
-    forces it back to 5 and only reloads slots — mildly inconsistent.
-  - Cosmetic: `delBtn` sets the dropdown text to "Select" while `RefreshCompList` uses
-    "Select Profile".
+- [x] **Bug pass — remaining findings (resolved):**
+  - **Same-class spec ambiguity:** accepted as-is. `PushSpecs` / `SummonComp.Finalize` use
+    per-class queues that pop each desired spec exactly once, so two same-class bots are
+    guaranteed to each get one of the specs. Which bot gets which (e.g. Holy vs Ret Paladin)
+    can still swap by roster order, but that's intentionally fine — both specs are covered.
+  - **Warrior shout options removed:** Warstorm has no shout strategy tokens, so the Warrior
+    options dropdown was removed from `GetOptionsForClassSpec` and the default comp's Warrior
+    `opt1` reset to `none` (was `commanding`).
+  - **Overwriting "Default 5-Man" in a non-5 size:** fixed. Removed the three hardcoded
+    "Default 5-Man → size 5" overrides (`RefreshCompList`, `currSize`, login handler); the
+    stored `size` field is now authoritative for every profile.
+  - Cosmetic: `delBtn` now sets the dropdown text to "Select Profile" to match `RefreshCompList`.
 - [x] **Save / overwrite profiles** — `Save` now overwrites the selected profile (with an
       "Overwrite?" confirm) and falls back to a name prompt when nothing is selected; added a
       dedicated **Save As** button for creating new profiles.
 - [x] **UI overhaul with ElvUI support** — `ApplyElvUISkin()` detects `_G.ElvUI` at login and
       skins all frames/buttons/dropdowns/checkboxes/scrollbar via the ElvUI Skins module, with
       `SetTemplate("Transparent")` on the main window and launcher. Defensive (`pcall`, runs
-      once) and falls back to the Blizzard look when ElvUI is absent. **Not yet tested in-game**
-      — verify visually with ElvUI enabled (esp. dropdown text/width and row alignment).
-- [ ] **Version sync** — `.lua`/`.toc` now v2.7; still need to refresh `readme.md`'s v2.4
-      "What's New" narrative.
+      once) and falls back to the Blizzard look when ElvUI is absent. Confirmed working in-game.
+- [x] **Version sync** — `.lua`, `.toc`, and `readme.md` are all on v2.8; readme "What's New"
+      refreshed with a v2.8 section.

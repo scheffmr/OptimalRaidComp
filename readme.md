@@ -1,8 +1,16 @@
-# Optimal Raid Comp Manager (ORC) v2.4
+# Optimal Raid Comp Manager (ORC) v2.8
 
 A lightweight, powerful composition manager designed specifically for World of Warcraft 3.3.5a (Wrath of the Lich King) servers utilizing `.warstormbot` and `mod-playerbots` mechanics. ORC eliminates the tedious macro-spamming of bot management by fully automating summoning, spec assignment, AI strategy configuration, gearing, buffing, and raid sorting.
 
-## 🌟 What's New in v2.4
+## 🌟 What's New in v2.8
+
+* **Overwrite-on-Save Profiles:** Saving with a profile selected now overwrites it (after an "Overwrite?" confirm), with a dedicated **Save As** button for creating new profiles.
+* **ElvUI Skinning:** When ElvUI is installed, ORC automatically skins all of its frames, buttons, dropdowns, checkboxes, and the scrollbar to match the ElvUI look. Falls back cleanly to the default Blizzard look when ElvUI is absent.
+* **Profile Size Consistency:** Profiles now always honor their saved raid size — overwriting any profile (including the built-in *Default 5-Man*) while in a different size no longer snaps it back to 5.
+* **Warrior Shout Dropdown Removed:** Warriors no longer show a buff/strategy dropdown, since the server has no shout strategy tokens.
+* **Window Controls:** Move the main window by left-click-dragging its background; move the launcher with **right**-click-drag; mouse-wheel over the window to resize (0.5–2.0, persisted).
+
+## What's New in v2.4
 
 * **Playerbots Strategy Mapping:** Seamlessly translates user-friendly UI selections (e.g., Kings, Devotion) into the correct `mod-playerbots` AI strategy commands (e.g., `nc +bstats`, `nc +barmor`) behind the scenes.
 * **Context-Aware Dropdowns:** The UI has been widened to include two new columns for mutually exclusive buffs and auras. These dropdowns only appear for relevant classes (Paladins, Shamans, Warriors, Priests) and dynamically adjust based on spec (e.g., Blessing of Sanctuary is only available if the Paladin is set to `prot`).
@@ -52,7 +60,7 @@ Type `/orc` in chat or click the floating **ORC** mini-launcher button to open t
 ---
 
 ## Credits
-* **Author:** Runshouse
+* **Author:** Runshouse, Marco
 * **Original Design:** Xhausted
 
 ## Original / Upstream

@@ -1,5 +1,5 @@
--- Optimal Raid Comp Manager (v2.7)
--- Author: Runshouse (Original design by Xhausted)
+-- Optimal Raid Comp Manager (v2.8)
+-- Author: Runshouse, Marco (Original design by Xhausted)
 -- Features: Priest Shadow Res toggle, Shaman Totem Dropdown Tooltips,
 --           Overwrite-on-Save profiles, optional ElvUI skinning.
 
@@ -17,7 +17,7 @@ OptimalRaidCompDB = OptimalRaidCompDB or {
 
 local activeSummonFrame = nil
 local activeSortFrame = nil
-local slots  -- forward declaration; populated in the GUI section
+local slots -- row data, built in the GUI section
 
 -- ==================== DATA TABLES & MAPPING ====================
 local classes = { "Warrior", "Paladin", "Hunter", "Rogue", "Priest", "Shaman", "Mage", "Warlock", "Druid", "DK" }
@@ -68,8 +68,6 @@ local function GetOptionsForClassSpec(class, spec)
         opt2List = {"devotion", "retribution", "concentration", "fire res", "frost res", "shadow res"}
     elseif class == "Shaman" then
         opt1List = {"melee", "caster", "healing", "fire res", "frost res", "nature res"}
-    elseif class == "Warrior" then
-        opt1List = {"battle", "commanding"}
     elseif class == "Priest" then
         opt1List = {"shadow res"}
     end
@@ -82,7 +80,7 @@ local default5Man = {
     size = 5,
     slots = {
         { class = "Paladin", spec = "ret", opt1 = "might", opt2 = "retribution", isPlayer = true },
-        { class = "Warrior", spec = "prot", opt1 = "commanding", opt2 = "none", isPlayer = false },
+        { class = "Warrior", spec = "prot", opt1 = "none", opt2 = "none", isPlayer = false },
         { class = "Priest", spec = "holy", opt1 = "none", opt2 = "none", isPlayer = false },
         { class = "Rogue", spec = "combat", opt1 = "none", opt2 = "none", isPlayer = false },
         { class = "Hunter", spec = "bm", opt1 = "none", opt2 = "none", isPlayer = false },
@@ -502,7 +500,7 @@ local function SummonComp(comp)
 
     SendChatMessage(".warstormbot bot remove *", "SAY")
     local watchFrame = CreateFrame("Frame")
-    activeSummonFrame = watchFrame  -- track now so STOP can abort during the pre-summon wait
+    activeSummonFrame = watchFrame -- so STOP works during the cleanup wait too
     local wStart = GetTime()
     watchFrame:SetScript("OnUpdate", function(self)
         local members, _ = GetPartyMembers()
@@ -733,8 +731,7 @@ local function RefreshCompList()
     UIDropDownMenu_Initialize(compDD, function()
         for name, data in pairs(OptimalRaidCompDB.comps) do
             local cSize = data.size or 25
-            if name == "Default 5-Man" then cSize = 5 end
-            
+
             if cSize == OptimalRaidCompDB.raidSize then
                 local info = UIDropDownMenu_CreateInfo()
                 info.text = name
@@ -751,7 +748,7 @@ local function RefreshCompList()
     end)
     
     local currData = OptimalRaidCompDB.currentComp and OptimalRaidCompDB.comps[OptimalRaidCompDB.currentComp]
-    local currSize = currData and (currData.size or (OptimalRaidCompDB.currentComp == "Default 5-Man" and 5 or 25))
+    local currSize = currData and (currData.size or 25)
     if currSize == OptimalRaidCompDB.raidSize then UIDropDownMenu_SetText(compDD, OptimalRaidCompDB.currentComp)
     else UIDropDownMenu_SetText(compDD, "Select Profile"); OptimalRaidCompDB.currentComp = nil end
 end
@@ -772,7 +769,7 @@ local function RefreshSizeDD()
     UIDropDownMenu_SetText(sizeDD, (OptimalRaidCompDB.raidSize or 25) .. "-Man")
 end
 
--- Writes the current UI layout into the named profile (creates or overwrites it).
+-- Save the current rows into a profile (new one or overwriting an existing one).
 local function SaveCurrentToProfile(name)
     if not name or name == "" then return end
     OptimalRaidCompDB.comps[name] = { size = OptimalRaidCompDB.raidSize, slots = {} }
@@ -813,7 +810,7 @@ end)
 saveAsBtn:SetScript("OnClick", function() StaticPopup_Show("ORC_SAVE_NEW") end)
 renBtn:SetScript("OnClick", function() if OptimalRaidCompDB.currentComp then StaticPopup_Show("ORC_RENAME") end end)
 delBtn:SetScript("OnClick", function()
-    if OptimalRaidCompDB.currentComp then OptimalRaidCompDB.comps[OptimalRaidCompDB.currentComp] = nil; OptimalRaidCompDB.currentComp = nil; UIDropDownMenu_SetText(compDD, "Select"); RefreshCompList() end
+    if OptimalRaidCompDB.currentComp then OptimalRaidCompDB.comps[OptimalRaidCompDB.currentComp] = nil; OptimalRaidCompDB.currentComp = nil; UIDropDownMenu_SetText(compDD, "Select Profile"); RefreshCompList() end
 end)
 
 -- ==================== LAUNCHER ====================
@@ -846,10 +843,9 @@ launch:SetScript("OnClick", function(self, button) if button == "LeftButton" the
 launch:SetScript("OnDragStart", function(self) self:StartMoving() end)
 launch:SetScript("OnDragStop", function(self) self:StopMovingOrSizing(); local _, _, _, x, y = self:GetPoint(); OptimalRaidCompDB.buttonPos = { x = x, y = y } end)
 
--- ==================== ELVUI SKINNING (optional) ====================
--- If ElvUI is loaded, restyle every ORC widget through its Skins module so the
--- addon blends into the ElvUI look. Entirely defensive: any failure is caught and
--- the addon keeps working with the default Blizzard appearance.
+-- ==================== ELVUI SKINNING ====================
+-- Match the ElvUI look when it's installed. Wrapped in pcall so a skin error
+-- can't stop the addon from loading; without ElvUI it just does nothing.
 local elvSkinned = false
 local function ApplyElvUISkin()
     if elvSkinned or not _G.ElvUI then return end
@@ -894,9 +890,9 @@ local function ApplyElvUISkin()
 
     if ok then
         elvSkinned = true
-        print("|cffffcc00[ORC]|r |cff00ff00ElvUI detected - interface skinned.|r")
+        print("|cff00ff00[ORC] ElvUI detected, interface skinned.|r")
     else
-        print("|cffff0000[ORC] ElvUI skin failed (using default look): " .. tostring(err) .. "|r")
+        print("|cffff0000[ORC] ElvUI skin failed, using default look: " .. tostring(err) .. "|r")
     end
 end
 
@@ -907,8 +903,7 @@ l:SetScript("OnEvent", function()
     if OptimalRaidCompDB.currentComp and OptimalRaidCompDB.comps[OptimalRaidCompDB.currentComp] then
         local data = OptimalRaidCompDB.comps[OptimalRaidCompDB.currentComp]
         OptimalRaidCompDB.raidSize = data.size or 25
-        if OptimalRaidCompDB.currentComp == "Default 5-Man" then OptimalRaidCompDB.raidSize = 5 end
-        
+
         for j = 1, MAX_ROWS do
             if data.slots[j] then
                 slots[j] = { class = data.slots[j].class, spec = data.slots[j].spec, opt1 = data.slots[j].opt1 or "none", opt2 = data.slots[j].opt2 or "none", isPlayer = data.slots[j].isPlayer }
