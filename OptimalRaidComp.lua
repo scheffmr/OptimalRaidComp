@@ -15,8 +15,22 @@ OptimalRaidCompDB = OptimalRaidCompDB or {
     raidSize = 25
 }
 
+-- Seed saved-var defaults added after the addon's first release, so existing DBs
+-- gain the new keys without clobbering the user's data.
+do
+    local db = OptimalRaidCompDB
+    if db.selectedTab == nil then db.selectedTab = 1 end
+    if db.selectedFormation == nil then db.selectedFormation = "Shield" end
+    if db.selectedFormationIndex == nil then db.selectedFormationIndex = 1 end
+    if db.controlExpanded == nil then db.controlExpanded = false end
+    if db.autoLevelUp == nil then db.autoLevelUp = true end
+    if db.tradeWhisper == nil then db.tradeWhisper = true end
+end
+
 local activeSummonFrame = nil
 local activeSortFrame = nil
+local reinitPending = false      -- a re-init requested during combat; runs on regen
+local pendingReinitComp = nil    -- comp snapshot to re-init once combat ends
 local slots -- row data, built in the GUI section
 
 -- ==================== DATA TABLES & MAPPING ====================
@@ -57,6 +71,109 @@ local TOTEM_TOOLTIPS = {
     ["fire res"]   = "Overrides Fire totem with Fire Resistance Totem.",
     ["frost res"]  = "Overrides Fire totem with Frost Resistance Totem.",
     ["nature res"] = "Overrides Air totem with Nature Resistance Totem."
+}
+
+-- ==================== SHARED INFRASTRUCTURE (bot control) ====================
+-- Raid-aware order broadcast: bot behavior orders go to RAID in a raid, else PARTY.
+-- (The original Warstorm Bot Manager was party-only; ORC supports 10/25-man, so
+-- orders must reach raid members too.)
+local function SendBotOrder(msg)
+    if GetNumRaidMembers() > 0 then SendChatMessage(msg, "RAID")
+    elseif GetNumPartyMembers() > 0 then SendChatMessage(msg, "PARTY")
+    else print("|cffff0000[ORC] Not in a group -- order not sent.|r") end
+end
+
+-- Lightweight OnUpdate scheduler (3.3.5a has no guaranteed C_Timer). Runs queued
+-- callbacks once their GetTime() target passes. Used to space chat commands and to
+-- defer follow-up steps (spec confirms, autogear, loot, reinit).
+local schedPending = {}
+local schedFrame = CreateFrame("Frame")
+schedFrame:SetScript("OnUpdate", function()
+    if #schedPending == 0 then return end
+    local now = GetTime()
+    local i = 1
+    while i <= #schedPending do
+        if now >= schedPending[i].at then
+            local item = table.remove(schedPending, i)
+            local ok, err = pcall(item.fn)
+            if not ok then print("|cffff0000[ORC] scheduled task error: "..tostring(err).."|r") end
+        else
+            i = i + 1
+        end
+    end
+end)
+local function After(delay, fn) table.insert(schedPending, { at = GetTime() + delay, fn = fn }) end
+
+-- Spec-confirmation tracking: after "talents spec ..." each bot replies in WHISPER
+-- with "picking <spec>". We wait until every whispered bot confirms before sending
+-- autogear, so gear isn't applied for a spec a bot hasn't switched to yet.
+local awaitingSpecs = nil   -- { remaining = {name=true,...}, count, onDone, token }
+local confirmFrame = CreateFrame("Frame")
+confirmFrame:RegisterEvent("CHAT_MSG_WHISPER")
+confirmFrame:SetScript("OnEvent", function(self, event, message, sender)
+    if not awaitingSpecs or not sender then return end
+    local short = string.match(sender, "^[^-]+") or sender   -- strip "-Realm" if present
+    if awaitingSpecs.remaining[short] and message and string.find(string.lower(message), "picking") then
+        awaitingSpecs.remaining[short] = nil
+        awaitingSpecs.count = awaitingSpecs.count - 1
+        if awaitingSpecs.count <= 0 then
+            local cb = awaitingSpecs.onDone
+            awaitingSpecs = nil
+            cb(true, {})
+        end
+    end
+end)
+
+-- Wait up to `timeout`s for every name in `names` (array) to whisper "picking ...".
+-- onDone(allConfirmed, missing) fires exactly once: immediately when all confirm, or
+-- at the timeout with the still-missing names.
+local function AwaitSpecConfirms(names, timeout, onDone)
+    local remaining, count = {}, 0
+    for _, n in ipairs(names or {}) do
+        if not remaining[n] then remaining[n] = true; count = count + 1 end
+    end
+    if count == 0 then onDone(true, {}); return end
+    local token = {}
+    awaitingSpecs = { remaining = remaining, count = count, onDone = onDone, token = token }
+    After(timeout, function()
+        if awaitingSpecs and awaitingSpecs.token == token then
+            local missing = {}
+            for n in pairs(awaitingSpecs.remaining) do table.insert(missing, n) end
+            awaitingSpecs = nil
+            onDone(false, missing)
+        end
+    end)
+end
+
+local function WarnSpecMissing(missing)
+    print("|cffff0000[ORC] WARNING - "..#missing.." bot(s) did not confirm spec: "..table.concat(missing, ", ").."|r")
+end
+
+-- ==================== CONTROL DATA ====================
+-- Formations and their command tokens (Warstorm-specific).
+local formations = {
+    { name = "Shield", command = "shield" }, { name = "Chaos",  command = "chaos" },
+    { name = "Circle", command = "circle" }, { name = "Line",   command = "line" },
+    { name = "Melee",  command = "melee" },  { name = "Near",   command = "near" },
+    { name = "Queue",  command = "queue" },  { name = "Arrow",  command = "arrow" },
+}
+-- Control grid: rows = roles (empty prefix = all bots), columns = actions.
+local roles = {
+    { label = "all",    prefix = "" },
+    { label = "tank",   prefix = "@tank " },
+    { label = "heal",   prefix = "@heal " },
+    { label = "dps",    prefix = "@dps " },
+    { label = "melee",  prefix = "@melee " },
+    { label = "ranged", prefix = "@ranged " },
+}
+local actions = { "attack", "stay", "follow", "flee" }
+-- Footer actions on the Control tab. command = nil means a custom OnClick.
+local footer = {
+    { label = "Summon",  command = "summon" },
+    { label = "Release", command = "release" },
+    { label = "Drink",   command = "drink" },
+    { label = "Skull",   command = nil },          -- rti skull + attack rti target
+    { label = "CC",      command = "rti cc moon" },
 }
 
 -- Context-Aware Mutually Exclusive Options
@@ -244,14 +361,33 @@ local function PushWorldBuffs()
     print("|cff00ff00[ORC] World buff command sent.|r")
 end
 
-local function PushSpecs(comp)
-    if not comp or not comp.slots then return end
-    print("|cff00ff00[ORC] Pushing spec commands...|r")
+-- Am I the loot-controlling leader of the current group?
+local function IsGroupLeader()
+    if GetNumRaidMembers() > 0 then return IsRaidLeader()
+    elseif GetNumPartyMembers() > 0 then return IsPartyLeader() end
+    return false
+end
+
+-- Set Free For All loot with an Epic threshold (4). Method and threshold are set on
+-- separate frames; setting both in one frame can drop the method change.
+local function SetGroupLoot()
+    if not IsGroupLeader() then return end
+    SetLootMethod("freeforall")
+    After(0.5, function()
+        if IsGroupLeader() then SetLootThreshold(4) end   -- 2=uncommon 3=rare 4=epic
+    end)
+    print("|cff00ff00[ORC] Loot set to Free For All / Epic threshold.|r")
+end
+
+-- Whisper each bot its spec + strategy/totem tokens, assigning by class queue (each
+-- desired spec consumed once). Returns the list of bot names whispered, so a caller
+-- can wait for their "picking ..." confirmations before gearing.
+local function WhisperCompSpecs(comp)
     local members = GetPartyMembers()
     local playerName = UnitName("player")
     local bots = {}
     for _, m in ipairs(members) do if m.name ~= playerName then table.insert(bots, m) end end
-    
+
     local desired = {}
     for i = 1, OptimalRaidCompDB.raidSize do
         local s = comp.slots[i]
@@ -264,30 +400,33 @@ local function PushSpecs(comp)
         table.insert(specQueues[d.class], d)
     end
 
-    local count = 0
+    local whispered = {}
     for _, m in ipairs(bots) do
         local short = UNIT_TO_SHORT[m.class]
         if short and specQueues[short] and #specQueues[short] > 0 then
             local data = table.remove(specQueues[short], 1)
             SendChatMessage("talents spec "..data.spec.." pve", "WHISPER", nil, m.name)
-            
             if data.opt1 and data.opt1 ~= "none" then
-                if short == "Shaman" then 
+                if short == "Shaman" then
                     SendChatMessage("nc totems "..data.opt1, "WHISPER", nil, m.name)
-                else 
-                    local cmd = STRAT_MAP[data.opt1] or data.opt1
-                    SendChatMessage("nc +"..cmd, "WHISPER", nil, m.name) 
+                else
+                    SendChatMessage("nc +"..(STRAT_MAP[data.opt1] or data.opt1), "WHISPER", nil, m.name)
                 end
             end
             if data.opt2 and data.opt2 ~= "none" then
-                local cmd = STRAT_MAP[data.opt2] or data.opt2
-                SendChatMessage("nc +"..cmd, "WHISPER", nil, m.name)
+                SendChatMessage("nc +"..(STRAT_MAP[data.opt2] or data.opt2), "WHISPER", nil, m.name)
             end
-            
-            count = count + 1
+            table.insert(whispered, m.name)
         end
     end
-    print("|cff00ff00[ORC] Spec/Buff whispers sent to " .. count .. " bots.|r")
+    return whispered
+end
+
+local function PushSpecs(comp)
+    if not comp or not comp.slots then return end
+    print("|cff00ff00[ORC] Pushing spec commands...|r")
+    local whispered = WhisperCompSpecs(comp)
+    print("|cff00ff00[ORC] Spec/Buff whispers sent to " .. #whispered .. " bots.|r")
 end
 
 local function PushSingleSpec(slotIndex)
@@ -459,36 +598,37 @@ local function SummonComp(comp)
             activeSummonFrame:SetScript("OnUpdate", function(it)
                 if iIdx > #toProcess then
                     it:SetScript("OnUpdate", nil)
-                    for _, tp in ipairs(toProcess) do 
+                    activeSummonFrame = nil   -- summon loop done; follow-ups run on the scheduler
+
+                    local whispered = {}
+                    for _, tp in ipairs(toProcess) do
                         SendChatMessage("talents spec "..tp.spec.." pve", "WHISPER", nil, tp.name)
                         if tp.opt1 and tp.opt1 ~= "none" then
-                            if tp.class == "Shaman" then 
+                            if tp.class == "Shaman" then
                                 SendChatMessage("nc totems "..tp.opt1, "WHISPER", nil, tp.name)
-                            else 
-                                local cmd = STRAT_MAP[tp.opt1] or tp.opt1
-                                SendChatMessage("nc +"..cmd, "WHISPER", nil, tp.name) 
+                            else
+                                SendChatMessage("nc +"..(STRAT_MAP[tp.opt1] or tp.opt1), "WHISPER", nil, tp.name)
                             end
                         end
                         if tp.opt2 and tp.opt2 ~= "none" then
-                            local cmd = STRAT_MAP[tp.opt2] or tp.opt2
-                            SendChatMessage("nc +"..cmd, "WHISPER", nil, tp.name)
+                            SendChatMessage("nc +"..(STRAT_MAP[tp.opt2] or tp.opt2), "WHISPER", nil, tp.name)
                         end
+                        table.insert(whispered, tp.name)
                     end
-                    print("|cffffff00[ORC] Specs pushed. Waiting 10s for Autogear...|r")
-                    
-                    local gearWaitStart, gearPushed = GetTime(), false
-                    it:SetScript("OnUpdate", function(gearSelf)
-                        local elapsed = GetTime() - gearWaitStart
-                        if elapsed >= 10 and not gearPushed then
-                            SendChatMessage("autogear", isRaid and "RAID" or "PARTY")
-                            print("|cff00ff00[ORC] Autogear sent. Waiting 2s for World Buffs...|r")
-                            gearPushed = true
-                        elseif elapsed >= 12 and gearPushed then
-                            gearSelf:SetScript("OnUpdate", nil)
+                    print("|cffffff00[ORC] Specs pushed. Waiting for bot confirmations...|r")
+                    SetGroupLoot()
+
+                    -- Gear once every bot confirms its spec (or after the 6s timeout,
+                    -- with a warning) so autogear can't race a not-yet-switched bot.
+                    AwaitSpecConfirms(whispered, 6, function(allOk, missing)
+                        if not allOk then WarnSpecMissing(missing) end
+                        SendChatMessage("autogear", isRaid and "RAID" or "PARTY")
+                        print("|cff00ff00[ORC] Autogear sent. World Buffs in 2s...|r")
+                        After(2, function()
                             SendChatMessage("nc +worldbuff", isRaid and "RAID" or "PARTY")
                             print("|cff00ff00[ORC] World Buffs sent! Setup Complete!|r")
-                            if isRaid then activeSummonFrame = nil; SortRaidGroup(comp) else activeSummonFrame = nil end
-                        end
+                            if isRaid then SortRaidGroup(comp) end
+                        end)
                     end)
                 else
                     SendChatMessage(".warstormbot bot init=epic "..toProcess[iIdx].name, "SAY")
@@ -519,6 +659,43 @@ StaticPopupDialogs["ORC_CONFIRM_SUMMON"] = {
 local function SafeSummon(comp)
     if GetNumRaidMembers() > 0 or GetNumPartyMembers() > 0 then StaticPopup_Show("ORC_CONFIRM_SUMMON", nil, nil, comp)
     else SummonComp(comp) end
+end
+
+-- Re-init the current bots: per-bot `.warstormbot bot init=epic <Name>` to SAY, then
+-- re-apply the comp's specs (confirm-gated) and autogear. init=epic is rejected in
+-- combat, so when in combat we flag it and the PLAYER_REGEN_ENABLED handler retries
+-- 3s after combat ends (in case a bot lingers in combat slightly longer than us).
+local function ReinitBots(comp)
+    local members, isRaid = GetPartyMembers()
+    local playerName = UnitName("player")
+    local bots = {}
+    for _, m in ipairs(members) do if m.name ~= playerName then table.insert(bots, m) end end
+    if #bots == 0 then print("|cffff0000[ORC] No bots in the group to re-init.|r"); return end
+
+    if UnitAffectingCombat("player") then
+        reinitPending = true; pendingReinitComp = comp
+        print("|cffffff00[ORC] In combat -- bots will re-init 3s after combat ends.|r")
+        return
+    end
+    reinitPending = false
+
+    print("|cff00ff00[ORC] Re-initializing "..#bots.." bots...|r")
+    for _, m in ipairs(bots) do
+        SendChatMessage(".warstormbot bot init=epic "..m.name, "SAY")
+    end
+    After(3, function()
+        if comp and comp.slots then
+            local whispered = WhisperCompSpecs(comp)
+            AwaitSpecConfirms(whispered, 6, function(allOk, missing)
+                if not allOk then WarnSpecMissing(missing) end
+                SendChatMessage("autogear", isRaid and "RAID" or "PARTY")
+                print("|cff00ff00[ORC] Bots re-initialized (autogear sent).|r")
+            end)
+        else
+            SendChatMessage("autogear", isRaid and "RAID" or "PARTY")
+            print("|cff00ff00[ORC] Bots re-initialized.|r")
+        end
+    end)
 end
 
 -- ==================== GUI ====================
@@ -896,6 +1073,34 @@ local function ApplyElvUISkin()
     end
 end
 
+-- Snapshot the visible UI rows into a comp table (same shape SummonComp/PushSpecs use).
+local function BuildCompFromSlots()
+    local temp = { slots = {} }
+    for j = 1, MAX_ROWS do
+        temp.slots[j] = { class=slots[j].class, spec=slots[j].spec, opt1=slots[j].opt1, opt2=slots[j].opt2, isPlayer=slots[j].isPlayer }
+    end
+    return temp
+end
+
+-- Auto-reinit on level up + the post-combat retry for a reinit deferred in combat.
+local ev = CreateFrame("Frame")
+ev:RegisterEvent("PLAYER_LEVEL_UP")
+ev:RegisterEvent("PLAYER_REGEN_ENABLED")
+ev:SetScript("OnEvent", function(self, event)
+    if event == "PLAYER_LEVEL_UP" then
+        if OptimalRaidCompDB.autoLevelUp == false then return end
+        if GetNumRaidMembers() == 0 and GetNumPartyMembers() == 0 then return end
+        ReinitBots(BuildCompFromSlots())
+    elseif event == "PLAYER_REGEN_ENABLED" then
+        if reinitPending then
+            reinitPending = false
+            local comp = pendingReinitComp or BuildCompFromSlots()
+            pendingReinitComp = nil
+            After(3, function() ReinitBots(comp) end)
+        end
+    end
+end)
+
 local l = CreateFrame("Frame"); l:RegisterEvent("PLAYER_LOGIN")
 l:SetScript("OnEvent", function()
     frame:SetScale(OptimalRaidCompDB.scale or 1.0)
@@ -918,4 +1123,10 @@ l:SetScript("OnEvent", function()
 end)
 
 SLASH_ORC1 = "/orc"
-SlashCmdList["ORC"] = function() if frame:IsShown() then frame:Hide() else frame:Show() end end
+SlashCmdList["ORC"] = function(msg)
+    msg = string.lower(msg or "")
+    msg = string.gsub(msg, "^%s+", ""); msg = string.gsub(msg, "%s+$", "")
+    if msg == "reinit" then ReinitBots(BuildCompFromSlots()); return end
+    if msg == "loot" then SetGroupLoot(); return end
+    if frame:IsShown() then frame:Hide() else frame:Show() end
+end
