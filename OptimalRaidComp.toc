@@ -7,4 +7,5 @@
 ## OptionalDeps: ElvUI
 ## SavedVariables: OptimalRaidCompDB
 
+Bindings.xml
 OptimalRaidComp.lua

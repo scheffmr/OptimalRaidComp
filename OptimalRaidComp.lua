@@ -1424,6 +1424,28 @@ l:SetScript("OnEvent", function()
     ShowTab(OptimalRaidCompDB.selectedTab or 1)
 end)
 
+-- ==================== KEYBINDINGS ====================
+-- Globals referenced by Bindings.xml (the only intentional globals; WoW's binding
+-- system can only call functions by name). Labels for the Key Bindings UI.
+BINDING_HEADER_OPTIMALRAIDCOMP = "Optimal Raid Comp"
+BINDING_NAME_ORC_TOGGLE    = "Toggle ORC window"
+BINDING_NAME_ORC_SUMMON    = "Summon bots"
+BINDING_NAME_ORC_ATTACK    = "Attack (tank's target)"
+BINDING_NAME_ORC_FOLLOW    = "Follow"
+BINDING_NAME_ORC_STAY      = "Stay"
+BINDING_NAME_ORC_RTSC_ON   = "RTSC on"
+BINDING_NAME_ORC_RTSC_SAVE = "RTSC save waypoint 1"
+BINDING_NAME_ORC_RTSC_GO   = "RTSC go waypoint 1"
+
+function ORC_Toggle()    if frame:IsShown() then frame:Hide() else frame:Show() end end
+function ORC_Summon()    SendBotOrder("summon") end
+function ORC_Attack()    SendBotOrder("@tank attack") end
+function ORC_Follow()    SendBotOrder("follow") end
+function ORC_Stay()      SendBotOrder("stay") end
+function ORC_RTSC_On()   SendBotOrder("rtsc") end
+function ORC_RTSC_Save() SendBotOrder("rtsc save 1") end
+function ORC_RTSC_Go()   SendBotOrder("rtsc go 1") end
+
 SLASH_ORC1 = "/orc"
 SlashCmdList["ORC"] = function(msg)
     msg = string.lower(msg or "")

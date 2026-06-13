@@ -1,0 +1,30 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/">
+
+	<Bindings>
+		<Binding name="ORC_TOGGLE" header="OPTIMALRAIDCOMP">
+			ORC_Toggle()
+		</Binding>
+		<Binding name="ORC_SUMMON">
+			ORC_Summon()
+		</Binding>
+		<Binding name="ORC_ATTACK">
+			ORC_Attack()
+		</Binding>
+		<Binding name="ORC_FOLLOW">
+			ORC_Follow()
+		</Binding>
+		<Binding name="ORC_STAY">
+			ORC_Stay()
+		</Binding>
+		<Binding name="ORC_RTSC_ON">
+			ORC_RTSC_On()
+		</Binding>
+		<Binding name="ORC_RTSC_SAVE">
+			ORC_RTSC_Save()
+		</Binding>
+		<Binding name="ORC_RTSC_GO">
+			ORC_RTSC_Go()
+		</Binding>
+	</Bindings>
+
+</Ui>
