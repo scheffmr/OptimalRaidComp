@@ -698,6 +698,136 @@ local function ReinitBots(comp)
     end)
 end
 
+-- ==================== TRADE PAYOUT ====================
+-- Warstorm bots buy green-or-better items you trade them, paying ~3x the items'
+-- vendor value. As soon as you place/change items in the trade window this whispers
+-- the partner the payout (3 x summed vendor sell value of the uncommon+ items on
+-- offer, excluding locked/unlockable containers). 3.3.5a's GetItemInfo returns no
+-- sell price, so value is read from a hidden tooltip's money frame. Toggle with
+-- /orc tradewhisper; verify the numbers with /orc tradevalue.
+local TRADE_SLOTS = 6   -- slots 1..6 are tradeable; slot 7 is the no-trade slot
+local tradeScanTip
+local function EnsureScanTip()
+    if not tradeScanTip then
+        tradeScanTip = CreateFrame("GameTooltip", "ORC_TradeScanTip", UIParent, "GameTooltipTemplate")
+    end
+    return tradeScanTip
+end
+
+local function ScanTipSellValue()
+    local mf = _G["ORC_TradeScanTipMoneyFrame1"]
+    if not mf or not mf:IsShown() then return 0 end
+    local function part(suffix)
+        local b = _G["ORC_TradeScanTipMoneyFrame1" .. suffix]
+        return tonumber(b and b:GetText()) or 0
+    end
+    return part("GoldButton") * 10000 + part("SilverButton") * 100 + part("CopperButton")
+end
+
+local function ScanTipLocked()
+    for i = 1, (tradeScanTip:NumLines() or 0) do
+        local fs = _G["ORC_TradeScanTipTextLeft" .. i]
+        local txt = fs and fs:GetText()
+        if txt and string.find(txt, LOCKED, 1, true) then return true end
+    end
+    return false
+end
+
+-- Format copper as "<g>g<s>s<c>c", omitting zero components. nil for non-positive.
+local function FormatPayout(copper)
+    if not copper or copper <= 0 then return nil end
+    local g = math.floor(copper / 10000)
+    local s = math.floor((copper % 10000) / 100)
+    local c = copper % 100
+    local msg = ""
+    if g > 0 then msg = msg .. g .. "g" end
+    if s > 0 then msg = msg .. s .. "s" end
+    if c > 0 then msg = msg .. c .. "c" end
+    return msg
+end
+
+-- Sum vendor value of uncommon+ non-locked offered items. Returns (copper, count,
+-- pending) -- pending=true when an item isn't cached yet so the caller can retry.
+local function ComputeOfferedVendorValue()
+    local tip = EnsureScanTip()
+    local total, count, pending = 0, 0, false
+    for i = 1, TRADE_SLOTS do
+        local link = GetTradePlayerItemLink(i)
+        if link then
+            local _, _, quality = GetItemInfo(link)
+            if not quality then
+                pending = true
+            elseif quality >= 2 then
+                local stale = _G["ORC_TradeScanTipMoneyFrame1"]
+                if stale then stale:Hide() end
+                tip:SetOwner(UIParent, "ANCHOR_NONE")
+                tip:ClearLines()
+                tip:SetTradePlayerItem(i)
+                if not ScanTipLocked() then
+                    local v = ScanTipSellValue()
+                    if v > 0 then total = total + v; count = count + 1 end
+                end
+            end
+        end
+    end
+    return total, count, pending
+end
+
+local function TradePartnerName()
+    local n = UnitName("NPC")
+    if n and n ~= "" and n ~= UNKNOWN then return n end
+    if TradeFrameRecipientNameText then
+        local t = TradeFrameRecipientNameText:GetText()
+        if t and t ~= "" then return t end
+    end
+    return nil
+end
+
+local tradeDebounceToken
+local lastTradePayoutMsg
+
+local function WhisperTradePayout()
+    if OptimalRaidCompDB.tradeWhisper == false then return end
+    local partner = TradePartnerName()
+    if not partner then return end
+    local total, count = ComputeOfferedVendorValue()
+    local msg = FormatPayout(total * 3)
+    if not msg then lastTradePayoutMsg = nil; return end   -- offer empty: let a re-add re-whisper
+    if msg == lastTradePayoutMsg then return end
+    lastTradePayoutMsg = msg
+    SendChatMessage(msg, "WHISPER", nil, partner)
+    print("|cff00ff00[ORC] trade payout -> "..partner..": "..msg.." (3x vendor of "..count.." item(s)).|r")
+end
+
+-- Print the current offer's payout without whispering (/orc tradevalue).
+local function PrintTradeValue()
+    local total, count = ComputeOfferedVendorValue()
+    local msg = FormatPayout(total * 3) or "0c"
+    print("|cff00ffff[ORC] trade value: "..msg.." (3x vendor of "..count.." item(s)).|r")
+end
+
+-- Debounce the per-slot TRADE_PLAYER_ITEM_CHANGED burst; retry while items load.
+local function ScheduleTradeWhisper(attempt)
+    attempt = attempt or 1
+    local token = {}
+    tradeDebounceToken = token
+    After(0.4, function()
+        if tradeDebounceToken ~= token then return end
+        local _, _, pending = ComputeOfferedVendorValue()
+        if pending and attempt < 5 then ScheduleTradeWhisper(attempt + 1)
+        else WhisperTradePayout() end
+    end)
+end
+
+local tradeFrame = CreateFrame("Frame")
+tradeFrame:RegisterEvent("TRADE_SHOW")
+tradeFrame:RegisterEvent("TRADE_CLOSED")
+tradeFrame:RegisterEvent("TRADE_PLAYER_ITEM_CHANGED")
+tradeFrame:SetScript("OnEvent", function(self, event)
+    if event == "TRADE_PLAYER_ITEM_CHANGED" then ScheduleTradeWhisper()
+    else lastTradePayoutMsg = nil end
+end)
+
 -- ==================== GUI ====================
 local frame = CreateFrame("Frame", "OptimalRaidCompFrame", UIParent)
 frame:SetSize(700, 465)
@@ -1128,5 +1258,13 @@ SlashCmdList["ORC"] = function(msg)
     msg = string.gsub(msg, "^%s+", ""); msg = string.gsub(msg, "%s+$", "")
     if msg == "reinit" then ReinitBots(BuildCompFromSlots()); return end
     if msg == "loot" then SetGroupLoot(); return end
+    if msg == "tradevalue" then PrintTradeValue(); return end
+    if msg == "tradewhisper" or msg == "tradewhisper on" or msg == "tradewhisper off" then
+        if msg == "tradewhisper on" then OptimalRaidCompDB.tradeWhisper = true
+        elseif msg == "tradewhisper off" then OptimalRaidCompDB.tradeWhisper = false
+        else OptimalRaidCompDB.tradeWhisper = not OptimalRaidCompDB.tradeWhisper end
+        print("|cff00ff00[ORC] Trade payout whisper: "..(OptimalRaidCompDB.tradeWhisper and "ON" or "OFF").."|r")
+        return
+    end
     if frame:IsShown() then frame:Hide() else frame:Show() end
 end
