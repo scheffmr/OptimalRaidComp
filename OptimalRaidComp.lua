@@ -1212,11 +1212,15 @@ do
     cmdWin:SetBackdropColor(0, 0, 0, 1)
 
     cmdClose = CreateFrame("Button", nil, cmdWin, "UIPanelCloseButton"); cmdClose:SetPoint("TOPRIGHT", -4, -4)
+    cmdClose:SetScript("OnClick", function() cmdWin:Hide(); OptimalRaidCompDB.cmdWinShown = false end)
     local cmdTitle = cmdWin:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     cmdTitle:SetPoint("TOPLEFT", 14, -12); cmdTitle:SetText("ORC Commands")
     local moreBtn = CBtn(cmdWin, "More", 60, 20); moreBtn:SetPoint("TOPRIGHT", -28, -10)
 
-    cmdBtn:SetScript("OnClick", function() if cmdWin:IsShown() then cmdWin:Hide() else cmdWin:Show() end end)
+    cmdBtn:SetScript("OnClick", function()
+        if cmdWin:IsShown() then cmdWin:Hide(); OptimalRaidCompDB.cmdWinShown = false
+        else cmdWin:Show(); OptimalRaidCompDB.cmdWinShown = true end
+    end)
 
     -- Track the last order ORC sent each role so 'attack' can break a stay/flee lock
     -- by sending 'follow' first; a double-tap of attack within 1.5s forces the same
@@ -1286,11 +1290,10 @@ do
     end)
     RefreshControlLayout()
 
-    -- Persist open/closed across reloads & zoning. Deliberately NOT in UISpecialFrames
-    -- so Escape / loading screens (CloseSpecialWindows) can't auto-close it -- once the
-    -- user opens it, it stays until they close it via the button or its X.
-    cmdWin:SetScript("OnShow", function() OptimalRaidCompDB.cmdWinShown = true end)
-    cmdWin:SetScript("OnHide", function() OptimalRaidCompDB.cmdWinShown = false end)
+    -- Restore the saved open/closed state. The flag is written ONLY on explicit user
+    -- actions (Commands button / the X) -- never via OnHide, because OnHide also fires
+    -- during /reload teardown and would always persist "closed", losing the state.
+    -- Not in UISpecialFrames either, so Escape / loading screens can't auto-close it.
     if OptimalRaidCompDB.cmdWinShown then cmdWin:Show() else cmdWin:Hide() end
 end
 
