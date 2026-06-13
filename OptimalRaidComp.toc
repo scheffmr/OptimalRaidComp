@@ -1,9 +1,9 @@
 ## Interface: 30300
 ## Title: Optimal Raid Comp Manager
-## Notes: Playerbots Strategy Mapping, Context Dropdowns, Shaman Tooltips, ElvUI Skinning.
+## Notes: Comp builder + automation, bot control (formations/orders/reinit/loot/trade), ElvUI Skinning.
 ## Author: Xhausted
 ## Optimization: Runshouse, Marco
-## Version: 2.8
+## Version: 3.0
 ## OptionalDeps: ElvUI
 ## SavedVariables: OptimalRaidCompDB
 

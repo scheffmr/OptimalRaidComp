@@ -30,9 +30,8 @@ Credits: Authors **Runshouse** and **Marco**, original design by **Xhausted**.
 | `readme.md` | User-facing documentation. |
 | `CLAUDE.md` | This file. |
 
-> **Version note:** `.lua` header, `.toc`, and `readme.md` are on **v2.8**. The bot-control
-> merge (below) is committed but **awaiting an in-game test before the version is bumped** (to
-> v2.9). Bump all three together when verified.
+> **Version note:** `.lua` header, `.toc`, and `readme.md` are on **v3.0** (the bot-control
+> merge, tested in-game and released). Keep all three in sync on future bumps.
 
 > **Supersedes `WarstormBotManager`.** ORC absorbed that addon's runtime bot-control features
 > (behavior grid, formations, summon/release/drink/skull/CC, RTSC, trade payout, level-up
@@ -181,14 +180,10 @@ Bots reply to spec whispers with `picking <spec>` (listened for by `confirmFrame
       once) and falls back to the Blizzard look when ElvUI is absent. Confirmed working in-game.
 - [x] **Version sync** — `.lua`, `.toc`, and `readme.md` are all on v2.8; readme "What's New"
       refreshed with a v2.8 section.
-- [ ] **Merge WarstormBotManager → ORC (bot control)** — committed in stages: scheduler +
+- [x] **Merge WarstormBotManager → ORC (bot control)** — done & released as **v3.0**: scheduler +
       spec-confirm gating + loot + reinit/level-up; trade payout; main-window controls (formation,
       Reinit, Loot FFA, toggles, Commands button) + a movable `ORC_CommandsWindow` (grid + footer
-      + More) + attack-reset; keybindings (`Bindings.xml`); docs. **Pending in-game verification,
-      then bump `.lua`/`.toc`/`readme.md` to v2.9.** Things to watch in testing:
-  - RAID-channel bot orders actually reach bots in 10/25-man (WBM was party-only — fall back to
-    PARTY if Warstorm ignores RAID-channel orders).
-  - Main window unchanged below the new top row (window grew 465→490; list start moved to -70).
-  - Commands window opens/moves/persists position; More/Less expands rows and resizes the window.
-  - Spec-confirm gating doesn't hang summon if `picking` replies never arrive (6s timeout gears anyway).
-  - Disable the old `WarstormBotManager` addon so its keybinds/handlers don't double-fire.
+      + More) + attack-reset; keybindings (`Bindings.xml`). Drink button sends `food`. Tested
+      in-game. **Disable the old `WarstormBotManager` addon** so its keybinds/handlers don't
+      double-fire. Open follow-up to confirm during real raids: that RAID-channel bot orders reach
+      bots in 10/25-man (WBM was party-only — fall back to PARTY if Warstorm ignores them).

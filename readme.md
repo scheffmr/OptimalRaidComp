@@ -1,8 +1,20 @@
-# Optimal Raid Comp Manager (ORC) v2.8
+# Optimal Raid Comp Manager (ORC) v3.0
 
 A lightweight, powerful composition manager designed specifically for World of Warcraft 3.3.5a (Wrath of the Lich King) servers utilizing `.warstormbot` and `mod-playerbots` mechanics. ORC eliminates the tedious macro-spamming of bot management by fully automating summoning, spec assignment, AI strategy configuration, gearing, buffing, and raid sorting.
 
-## 🌟 What's New in v2.8
+## 🌟 What's New in v3.0
+
+ORC now also covers **live bot control**, absorbing the functionality of the discontinued *Warstorm Bot Manager* addon (disable that one to avoid duplicate keybinds). See [Bot Control](#bot-control) for the full rundown.
+
+* **Live orders:** A movable **ORC Commands** window with a role-targeted behavior grid (attack / stay / follow / flee for all, tank, heal, dps, melee, ranged) plus Summon / Release / Drink / Skull / CC.
+* **Smart attack reset:** `attack` auto-sends `follow` first to break a `stay`/`flee` lock, and a double-tap forces the reset for any case it didn't track.
+* **Formations:** Cycle and Set/Check the 8 bot formations from the main window.
+* **Reinit & loot:** One-click `init=epic` + re-spec + autogear, and Free-For-All / Epic loot (auto-applied on summon).
+* **Auto-reinit on level up** and **trade-payout whisper** (3× vendor value), each toggleable.
+* **Spec-confirm gating:** Summon/reinit now wait for each bot's spec confirmation before gearing, so bots are never geared for the wrong spec.
+* **Keybindings:** Bind toggle, summon, attack, follow, stay, and the RTSC waypoint controls.
+
+## What's New in v2.8
 
 * **Overwrite-on-Save Profiles:** Saving with a profile selected now overwrites it (after an "Overwrite?" confirm), with a dedicated **Save As** button for creating new profiles.
 * **ElvUI Skinning:** When ElvUI is installed, ORC automatically skins all of its frames, buttons, dropdowns, checkboxes, and the scrollbar to match the ElvUI look. Falls back cleanly to the default Blizzard look when ElvUI is absent.

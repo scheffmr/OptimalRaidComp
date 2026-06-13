@@ -1,7 +1,8 @@
--- Optimal Raid Comp Manager (v2.8)
+-- Optimal Raid Comp Manager (v3.0)
 -- Author: Runshouse, Marco (Original design by Xhausted)
--- Features: Priest Shadow Res toggle, Shaman Totem Dropdown Tooltips,
---           Overwrite-on-Save profiles, optional ElvUI skinning.
+-- Features: comp builder with automated summon / spec / gear / buff / raid sort,
+--           overwrite-on-save profiles, optional ElvUI skinning, and bot control
+--           (formations, behavior grid, reinit, loot, trade payout, keybindings).
 
 local PADDING, SLOT_HEIGHT = 10, 30
 local CLASS_COL_WIDTH, SPEC_COL_WIDTH = 100, 90
