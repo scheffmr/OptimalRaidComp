@@ -129,7 +129,7 @@ Bots reply to spec whispers with `picking <spec>` (listened for by `confirmFrame
 | `formation` | Query/check current formation. |
 | `attack` / `stay` / `follow` / `flee` | Behavior for all bots. |
 | `@<tank\|heal\|dps\|melee\|ranged> <action>` | Same behavior, role-scoped (e.g. `@tank attack`). |
-| `summon` / `release` / `drink` | Footer actions (teleport to you / release / rest). |
+| `summon` / `release` / `food` | Footer actions (teleport to you / release / rest — the "Drink" button sends `food`). |
 | `rti skull` then `attack rti target` | Skull button: mark + attack the marked target. |
 | `rti cc moon` | CC button: crowd-control the moon target. |
 | `rtsc` / `rtsc save 1` / `rtsc go 1` | RTSC waypoint control (keybinds only). |

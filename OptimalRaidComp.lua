@@ -183,7 +183,7 @@ local actions = { "attack", "stay", "follow", "flee" }
 local footer = {
     { label = "Summon",  command = "summon" },
     { label = "Release", command = "release" },
-    { label = "Drink",   command = "drink" },
+    { label = "Drink",   command = "food" },        -- "Drink"/rest button; server order is "food"
     { label = "Skull",   command = nil },          -- rti skull + attack rti target
     { label = "CC",      command = "rti cc moon" },
 }
