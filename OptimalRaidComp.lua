@@ -1,4 +1,4 @@
--- Optimal Raid Comp Manager (v3.0)
+-- Optimal Raid Comp Manager (v3.1)
 -- Author: Runshouse, Marco (Original design by Xhausted)
 -- Features: comp builder with automated summon / spec / gear / buff / raid sort,
 --           overwrite-on-save profiles, optional ElvUI skinning, and bot control
@@ -1135,7 +1135,7 @@ end)
 -- ==================== BOT CONTROL ====================
 local controlButtons, controlChecks = {}, {}
 local cmdWin, cmdClose      -- floating Commands window + its close button
-local RefreshControlLayout
+local RefreshControlLayout, RestoreControlState
 
 do
     local function CBtn(parent, text, w, h)
@@ -1186,11 +1186,12 @@ do
         t:SetPoint("LEFT", c, "RIGHT", 2, 0); t:SetText(label)
         c:SetScript("OnClick", function(self) setv(self:GetChecked() and true or false) end)
         table.insert(controlChecks, c)
+        return c
     end
-    CChk(frame, "Auto-reinit on level up", 300, 88,
+    local autoChk = CChk(frame, "Auto-reinit on level up", 300, 88,
         function() return OptimalRaidCompDB.autoLevelUp end,
         function(v) OptimalRaidCompDB.autoLevelUp = v end)
-    CChk(frame, "Trade payout whisper", 500, 88,
+    local tradeChk = CChk(frame, "Trade payout whisper", 500, 88,
         function() return OptimalRaidCompDB.tradeWhisper end,
         function(v) OptimalRaidCompDB.tradeWhisper = v end)
 
@@ -1205,8 +1206,10 @@ do
     cmdWin:SetScript("OnDragStart", cmdWin.StartMoving)
     cmdWin:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
-        local _, _, _, x, y = self:GetPoint()
-        OptimalRaidCompDB.cmdWinPos = { x = x, y = y }
+        -- Save the full anchor: StartMoving can leave GetPoint anchored to a different
+        -- point/relativePoint, so saving only x/y and restoring as CENTER mis-places it.
+        local point, _, relPoint, x, y = self:GetPoint()
+        OptimalRaidCompDB.cmdWinPos = { point = point, rel = relPoint, x = x, y = y }
     end)
     cmdWin:SetBackdrop({bgFile="Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border", tile=true, tileSize=32, edgeSize=32, insets={left=11, right=12, top=12, bottom=11}})
     cmdWin:SetBackdropColor(0, 0, 0, 1)
@@ -1288,13 +1291,36 @@ do
         OptimalRaidCompDB.controlExpanded = not OptimalRaidCompDB.controlExpanded
         RefreshControlLayout()
     end)
-    RefreshControlLayout()
 
-    -- Restore the saved open/closed state. The flag is written ONLY on explicit user
-    -- actions (Commands button / the X) -- never via OnHide, because OnHide also fires
-    -- during /reload teardown and would always persist "closed", losing the state.
-    -- Not in UISpecialFrames either, so Escape / loading screens can't auto-close it.
-    if OptimalRaidCompDB.cmdWinShown then cmdWin:Show() else cmdWin:Hide() end
+    -- On 3.3.5a, SavedVariables are loaded AFTER this file executes (they're only
+    -- available by PLAYER_LOGIN), so reading them now yields defaults, not the saved
+    -- values. RestoreControlState re-seeds missing keys and re-applies the saved control
+    -- state; it runs once here (first-run/safety) and again from PLAYER_LOGIN, where the
+    -- real saved data exists. Visibility is persisted ONLY via explicit clicks (Commands
+    -- button / the X), never via OnHide -- OnHide also fires during /reload teardown and
+    -- would always save "closed". The window is also kept out of UISpecialFrames so
+    -- Escape / loading screens can't auto-close it.
+    function RestoreControlState()
+        local db = OptimalRaidCompDB
+        if db.selectedFormation == nil then db.selectedFormation = "Shield" end
+        if db.selectedFormationIndex == nil then db.selectedFormationIndex = 1 end
+        if db.controlExpanded == nil then db.controlExpanded = false end
+        if db.autoLevelUp == nil then db.autoLevelUp = true end
+        if db.tradeWhisper == nil then db.tradeWhisper = true end
+        if db.cmdWinPos == nil then db.cmdWinPos = { point = "CENTER", rel = "CENTER", x = 300, y = 0 } end
+        if db.cmdWinShown == nil then db.cmdWinShown = false end
+
+        SetFormText()
+        autoChk:SetChecked(db.autoLevelUp)
+        tradeChk:SetChecked(db.tradeWhisper)
+        RefreshControlLayout()
+
+        local p = db.cmdWinPos
+        cmdWin:ClearAllPoints()
+        cmdWin:SetPoint(p.point or "CENTER", UIParent, p.rel or p.point or "CENTER", p.x or 0, p.y or 0)
+        if db.cmdWinShown then cmdWin:Show() else cmdWin:Hide() end
+    end
+    RestoreControlState()
 end
 
 -- ==================== LAUNCHER ====================
@@ -1426,6 +1452,7 @@ l:SetScript("OnEvent", function()
     end
 
     RefreshSizeDD(); RefreshCompList(); UpdateVisibleRows()
+    RestoreControlState()   -- saved vars are loaded by now (unlike at file scope on 3.3.5a)
     ApplyElvUISkin()
 end)
 

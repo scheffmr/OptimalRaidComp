@@ -30,8 +30,8 @@ Credits: Authors **Runshouse** and **Marco**, original design by **Xhausted**.
 | `readme.md` | User-facing documentation. |
 | `CLAUDE.md` | This file. |
 
-> **Version note:** `.lua` header, `.toc`, and `readme.md` are on **v3.0** (the bot-control
-> merge, tested in-game and released). Keep all three in sync on future bumps.
+> **Version note:** `.lua` header, `.toc`, and `readme.md` are on **v3.1** (bot-control merge +
+> Commands-window persistence fixes, tested in-game and released). Keep all three in sync on bumps.
 
 > **Supersedes `WarstormBotManager`.** ORC absorbed that addon's runtime bot-control features
 > (behavior grid, formations, summon/release/drink/skull/CC, RTSC, trade payout, level-up

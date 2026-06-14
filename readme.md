@@ -1,8 +1,12 @@
-# Optimal Raid Comp Manager (ORC) v3.0
+# Optimal Raid Comp Manager (ORC) v3.1
 
 A lightweight, powerful composition manager designed specifically for World of Warcraft 3.3.5a (Wrath of the Lich King) servers utilizing `.warstormbot` and `mod-playerbots` mechanics. ORC eliminates the tedious macro-spamming of bot management by fully automating summoning, spec assignment, AI strategy configuration, gearing, buffing, and raid sorting.
 
-## 🌟 What's New in v3.0
+## 🌟 What's New in v3.1
+
+* **Commands window persistence fixed:** The **ORC Commands** window now reliably stays open across `/reload`, zoning, and loading screens once you open it, and remembers its exact position. (On 3.3.5a, saved variables load after the addon file runs, so the window state is now restored at login; the full window anchor is saved so the position no longer snaps to center.)
+
+## What's New in v3.0
 
 ORC now also covers **live bot control**, absorbing the functionality of the discontinued *Warstorm Bot Manager* addon (disable that one to avoid duplicate keybinds). See [Bot Control](#bot-control) for the full rundown.
 
