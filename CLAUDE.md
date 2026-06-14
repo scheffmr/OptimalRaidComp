@@ -187,3 +187,26 @@ Bots reply to spec whispers with `picking <spec>` (listened for by `confirmFrame
       in-game. **Disable the old `WarstormBotManager` addon** so its keybinds/handlers don't
       double-fire. Open follow-up to confirm during real raids: that RAID-channel bot orders reach
       bots in 10/25-man (WBM was party-only — fall back to PARTY if Warstorm ignores them).
+
+## Next steps / in progress
+
+Released state: **`master` is v3.1** (tagged `v3.1`, GitHub release published with zip).
+
+- [ ] **Trade-payout first-slot fix — verify, then release v3.1.1.** On branch
+      **`fix/trade-payout-first-slot`** (commit `ee55036`, pushed; the working tree is checked out
+      on this branch so it's live for testing). **Not yet tested in-game.**
+  - *Bug:* an item in the first trade slot wasn't whispered. Root cause: sell value was read from
+    a hardcoded `ORC_TradeScanTipMoneyFrame1`, but the scan tooltip's money-frame index drifts
+    across `SetTradePlayerItem` calls (`SetOwner` only resets it via `OnHide`, which never fires on
+    our always-hidden tooltip), so a slot could read a stale/hidden frame as 0.
+  - *Fix:* `HideAllScanMoney()` before each item + `ScanTipSellValue()` now scans for whichever
+    money frame is actually shown (not index 1). See the TRADE PAYOUT section in `.lua`.
+  - *Test:* `/reload`, trade a green+ item to a bot in the **first** slot → expect a payout
+    whisper; multi-slot sum should include all; `/orc tradevalue` prints without whispering.
+  - *On success:* `git checkout master && git merge fix/trade-payout-first-slot`, bump
+    `.lua`/`.toc`/`readme.md` to **v3.1.1** (+ readme "What's New"), commit, push, tag `v3.1.1`,
+    and `gh release create` with a fresh `git archive` zip (see the v3.0/v3.1 release commits for
+    the exact command).
+- [ ] **Confirm RAID-channel bot orders in 10/25-man** (carried over from v3.0). `SendBotOrder`
+      sends to RAID in a raid; WBM was party-only. If Warstorm ignores RAID-channel orders, fall
+      back to PARTY (or whisper per-bot).
