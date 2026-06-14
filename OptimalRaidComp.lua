@@ -727,14 +727,36 @@ local function EnsureScanTip()
     return tradeScanTip
 end
 
-local function ScanTipSellValue()
-    local mf = _G["ORC_TradeScanTipMoneyFrame1"]
-    if not mf or not mf:IsShown() then return 0 end
-    local function part(suffix)
-        local b = _G["ORC_TradeScanTipMoneyFrame1" .. suffix]
-        return tonumber(b and b:GetText()) or 0
+-- Hide every money frame the scan tooltip has created so a stale one can't be read.
+local function HideAllScanMoney()
+    local i = 1
+    while true do
+        local mf = _G["ORC_TradeScanTipMoneyFrame" .. i]
+        if not mf then return end
+        mf:Hide()
+        i = i + 1
     end
-    return part("GoldButton") * 10000 + part("SilverButton") * 100 + part("CopperButton")
+end
+
+-- Read the sell value from whichever money frame the tooltip is currently showing.
+-- The tooltip's money-frame index can drift across SetTradePlayerItem calls (SetOwner
+-- only resets it via OnHide, which never fires on our always-hidden tooltip), so a
+-- hardcoded MoneyFrame1 read can miss the value for some slots -- scan for the shown one.
+local function ScanTipSellValue()
+    local i = 1
+    while true do
+        local name = "ORC_TradeScanTipMoneyFrame" .. i
+        local mf = _G[name]
+        if not mf then return 0 end
+        if mf:IsShown() then
+            local function part(suffix)
+                local b = _G[name .. suffix]
+                return tonumber(b and b:GetText()) or 0
+            end
+            return part("GoldButton") * 10000 + part("SilverButton") * 100 + part("CopperButton")
+        end
+        i = i + 1
+    end
 end
 
 local function ScanTipLocked()
@@ -771,8 +793,7 @@ local function ComputeOfferedVendorValue()
             if not quality then
                 pending = true
             elseif quality >= 2 then
-                local stale = _G["ORC_TradeScanTipMoneyFrame1"]
-                if stale then stale:Hide() end
+                HideAllScanMoney()
                 tip:SetOwner(UIParent, "ANCHOR_NONE")
                 tip:ClearLines()
                 tip:SetTradePlayerItem(i)
