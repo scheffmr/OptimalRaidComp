@@ -1,4 +1,4 @@
--- Optimal Raid Comp Manager (v3.1)
+-- Optimal Raid Comp Manager (v3.1.1)
 -- Author: Runshouse, Marco (Original design by Xhausted)
 -- Features: comp builder with automated summon / spec / gear / buff / raid sort,
 --           overwrite-on-save profiles, optional ElvUI skinning, and bot control
@@ -727,36 +727,36 @@ local function EnsureScanTip()
     return tradeScanTip
 end
 
--- Hide every money frame the scan tooltip has created so a stale one can't be read.
-local function HideAllScanMoney()
-    local i = 1
-    while true do
+-- Reset the scan tooltip's money frames so the *next* SetTradePlayerItem reuses
+-- MoneyFrame1. Mirrors GameTooltip_ClearMoney, which 3.3.5a runs only on the tooltip's
+-- OnHide -- our scan tooltip is always hidden, so it never fires and shownMoneyFrames
+-- would otherwise grow without bound. With the counter reset before every item, each
+-- slot's value lands in the same, known frame (index 1) instead of a drifting one.
+local function ResetScanMoney()
+    local tip = tradeScanTip
+    if not tip then return end
+    local n = tip.shownMoneyFrames or 0
+    for i = 1, n do
         local mf = _G["ORC_TradeScanTipMoneyFrame" .. i]
-        if not mf then return end
-        mf:Hide()
-        i = i + 1
+        if mf then mf:Hide() end
     end
+    tip.shownMoneyFrames = nil
 end
 
--- Read the sell value from whichever money frame the tooltip is currently showing.
--- The tooltip's money-frame index can drift across SetTradePlayerItem calls (SetOwner
--- only resets it via OnHide, which never fires on our always-hidden tooltip), so a
--- hardcoded MoneyFrame1 read can miss the value for some slots -- scan for the shown one.
+-- Read the sell value from the money frame SetTradePlayerItem just populated. After a
+-- ResetScanMoney() the item's money line lands in MoneyFrame<shownMoneyFrames> (==1);
+-- if the item has no sell price the counter stays nil and we correctly read 0.
 local function ScanTipSellValue()
-    local i = 1
-    while true do
-        local name = "ORC_TradeScanTipMoneyFrame" .. i
-        local mf = _G[name]
-        if not mf then return 0 end
-        if mf:IsShown() then
-            local function part(suffix)
-                local b = _G[name .. suffix]
-                return tonumber(b and b:GetText()) or 0
-            end
-            return part("GoldButton") * 10000 + part("SilverButton") * 100 + part("CopperButton")
-        end
-        i = i + 1
+    local tip = tradeScanTip
+    local idx = tip and tip.shownMoneyFrames
+    if not idx or idx == 0 then return 0 end
+    local name = "ORC_TradeScanTipMoneyFrame" .. idx
+    if not _G[name] then return 0 end
+    local function part(suffix)
+        local b = _G[name .. suffix]
+        return tonumber(b and b:GetText()) or 0
     end
+    return part("GoldButton") * 10000 + part("SilverButton") * 100 + part("CopperButton")
 end
 
 local function ScanTipLocked()
@@ -783,7 +783,8 @@ end
 
 -- Sum vendor value of uncommon+ non-locked offered items. Returns (copper, count,
 -- pending) -- pending=true when an item isn't cached yet so the caller can retry.
-local function ComputeOfferedVendorValue()
+-- When `report` is true, prints a per-slot breakdown (used by /orc tradevalue).
+local function ComputeOfferedVendorValue(report)
     local tip = EnsureScanTip()
     local total, count, pending = 0, 0, false
     for i = 1, TRADE_SLOTS do
@@ -792,15 +793,21 @@ local function ComputeOfferedVendorValue()
             local _, _, quality = GetItemInfo(link)
             if not quality then
                 pending = true
+                if report then print("|cffaaaaaa[ORC] slot "..i..": "..link.." (not cached yet)|r") end
             elseif quality >= 2 then
-                HideAllScanMoney()
+                ResetScanMoney()
                 tip:SetOwner(UIParent, "ANCHOR_NONE")
                 tip:ClearLines()
                 tip:SetTradePlayerItem(i)
-                if not ScanTipLocked() then
-                    local v = ScanTipSellValue()
-                    if v > 0 then total = total + v; count = count + 1 end
+                local locked = ScanTipLocked()
+                local v = locked and 0 or ScanTipSellValue()
+                if v > 0 then total = total + v; count = count + 1 end
+                if report then
+                    print("|cffaaaaaa[ORC] slot "..i..": "..link.." -> "..(locked and "locked" or
+                        ((FormatPayout(v) or "0c").." vendor"))..(v > 0 and " (counted)" or "")..".|r")
                 end
+            elseif report then
+                print("|cffaaaaaa[ORC] slot "..i..": "..link.." (common/poor -- skipped)|r")
             end
         end
     end
@@ -835,7 +842,7 @@ end
 
 -- Print the current offer's payout without whispering (/orc tradevalue).
 local function PrintTradeValue()
-    local total, count = ComputeOfferedVendorValue()
+    local total, count = ComputeOfferedVendorValue(true)
     local msg = FormatPayout(total * 3) or "0c"
     print("|cff00ffff[ORC] trade value: "..msg.." (3x vendor of "..count.." item(s)).|r")
 end
@@ -858,8 +865,12 @@ tradeFrame:RegisterEvent("TRADE_SHOW")
 tradeFrame:RegisterEvent("TRADE_CLOSED")
 tradeFrame:RegisterEvent("TRADE_PLAYER_ITEM_CHANGED")
 tradeFrame:SetScript("OnEvent", function(self, event)
-    if event == "TRADE_PLAYER_ITEM_CHANGED" then ScheduleTradeWhisper()
-    else lastTradePayoutMsg = nil end
+    -- TRADE_CLOSED: just clear state. TRADE_SHOW also schedules a scan, because dropping
+    -- an item onto a unit frame opens the trade with slot 1 already filled and fires no
+    -- TRADE_PLAYER_ITEM_CHANGED for it -- without this the pre-placed item is never paid.
+    if event == "TRADE_CLOSED" then lastTradePayoutMsg = nil; return end
+    if event == "TRADE_SHOW" then lastTradePayoutMsg = nil end
+    ScheduleTradeWhisper()
 end)
 
 -- ==================== GUI ====================

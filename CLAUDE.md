@@ -30,8 +30,8 @@ Credits: Authors **Runshouse** and **Marco**, original design by **Xhausted**.
 | `readme.md` | User-facing documentation. |
 | `CLAUDE.md` | This file. |
 
-> **Version note:** `.lua` header, `.toc`, and `readme.md` are on **v3.1** (bot-control merge +
-> Commands-window persistence fixes, tested in-game and released). Keep all three in sync on bumps.
+> **Version note:** `.lua` header, `.toc`, and `readme.md` are on **v3.1.1** (trade-payout
+> first-slot + unit-frame-drop fixes, tested in-game and released). Keep all three in sync on bumps.
 
 > **Supersedes `WarstormBotManager`.** ORC absorbed that addon's runtime bot-control features
 > (behavior grid, formations, summon/release/drink/skull/CC, RTSC, trade payout, level-up
@@ -190,23 +190,19 @@ Bots reply to spec whispers with `picking <spec>` (listened for by `confirmFrame
 
 ## Next steps / in progress
 
-Released state: **`master` is v3.1** (tagged `v3.1`, GitHub release published with zip).
+Released state: **`master` is v3.1.1** (tagged `v3.1.1`, GitHub release published with zip).
 
-- [ ] **Trade-payout first-slot fix — verify, then release v3.1.1.** On branch
-      **`fix/trade-payout-first-slot`** (commit `ee55036`, pushed; the working tree is checked out
-      on this branch so it's live for testing). **Not yet tested in-game.**
-  - *Bug:* an item in the first trade slot wasn't whispered. Root cause: sell value was read from
-    a hardcoded `ORC_TradeScanTipMoneyFrame1`, but the scan tooltip's money-frame index drifts
-    across `SetTradePlayerItem` calls (`SetOwner` only resets it via `OnHide`, which never fires on
-    our always-hidden tooltip), so a slot could read a stale/hidden frame as 0.
-  - *Fix:* `HideAllScanMoney()` before each item + `ScanTipSellValue()` now scans for whichever
-    money frame is actually shown (not index 1). See the TRADE PAYOUT section in `.lua`.
-  - *Test:* `/reload`, trade a green+ item to a bot in the **first** slot → expect a payout
-    whisper; multi-slot sum should include all; `/orc tradevalue` prints without whispering.
-  - *On success:* `git checkout master && git merge fix/trade-payout-first-slot`, bump
-    `.lua`/`.toc`/`readme.md` to **v3.1.1** (+ readme "What's New"), commit, push, tag `v3.1.1`,
-    and `gh release create` with a fresh `git archive` zip (see the v3.0/v3.1 release commits for
-    the exact command).
+- [x] **Trade-payout first-slot fix — done & released as v3.1.1.** Tested in-game (both the
+      open-window-then-place and drop-on-unit-frame trade-start paths), merged to `master`.
+  - *Bugs:* (1) an item in the first trade slot wasn't whispered — the scan tooltip's money-frame
+    index drifts across `SetTradePlayerItem` calls because 3.3.5a only resets it via `OnHide`,
+    which never fires on our always-hidden tooltip, so a slot could read a stale/hidden frame as 0;
+    (2) starting a trade by **dropping an item onto a bot's unit frame** pre-fills slot 1 and fires
+    no `TRADE_PLAYER_ITEM_CHANGED`, so the pre-placed item was never evaluated.
+  - *Fix:* `ResetScanMoney()` clears `shownMoneyFrames` before each item so every read uses a
+    deterministic MoneyFrame1, and `ScanTipSellValue()` reads that exact index; the trade event
+    handler now also schedules a scan on `TRADE_SHOW`. `/orc tradevalue` prints a per-slot
+    breakdown. See the TRADE PAYOUT section in `.lua`.
 - [ ] **Confirm RAID-channel bot orders in 10/25-man** (carried over from v3.0). `SendBotOrder`
       sends to RAID in a raid; WBM was party-only. If Warstorm ignores RAID-channel orders, fall
       back to PARTY (or whisper per-bot).
