@@ -6,13 +6,12 @@
 
 local PADDING, SLOT_HEIGHT = 10, 30
 local CLASS_COL_WIDTH, SPEC_COL_WIDTH = 100, 90
-local VISIBLE_ROWS, MAX_ROWS, ROW_HEIGHT = 10, 25, 30
+local VISIBLE_ROWS, MAX_ROWS, ROW_HEIGHT = 10, 40, 30
 
 -- ==================== SAVED VARIABLES ====================
 OptimalRaidCompDB = OptimalRaidCompDB or {
     comps = {},
     currentComp = nil,
-    buttonPos = { x = -200, y = 0 },
     scale = 1.0,
     raidSize = 25
 }
@@ -27,7 +26,6 @@ do
     if db.autoLevelUp == nil then db.autoLevelUp = true end
     if db.tradeWhisper == nil then db.tradeWhisper = true end
     if db.cmdWinPos == nil then db.cmdWinPos = { x = 300, y = 0 } end
-    if db.cmdWinShown == nil then db.cmdWinShown = false end
 end
 
 local activeSummonFrame = nil
@@ -180,13 +178,10 @@ local roles = {
     { label = "ranged", prefix = "@ranged " },
 }
 local actions = { "attack", "stay", "follow", "flee" }
--- Footer actions on the Control tab. command = nil means a custom OnClick.
+-- Footer actions in the Commands window.
 local footer = {
     { label = "Summon",  command = "summon" },
     { label = "Release", command = "release" },
-    { label = "Drink",   command = "food" },        -- "Drink"/rest button; server order is "food"
-    { label = "Skull",   command = nil },          -- rti skull + attack rti target
-    { label = "CC",      command = "rti cc moon" },
 }
 
 -- Context-Aware Mutually Exclusive Options
@@ -221,6 +216,60 @@ for i = 6, 25 do table.insert(default5Man.slots, {class="Warrior", spec="prot", 
 if not OptimalRaidCompDB.comps["Default 5-Man"] then
     OptimalRaidCompDB.comps["Default 5-Man"] = default5Man
     if not OptimalRaidCompDB.currentComp then OptimalRaidCompDB.currentComp = "Default 5-Man" end
+end
+
+-- Default 40-man raid: a balanced starting point with tanks, healers, melee,
+-- ranged, and all raid-buff classes represented. The player occupies the first
+-- slot and can be changed in the planner like every other profile.
+local default40Man = {
+    name = "Default 40-Man",
+    size = 40,
+    slots = {
+        {class="Paladin", spec="ret",     opt1="might",   opt2="retribution", isPlayer=true},
+        {class="Paladin", spec="prot",    opt1="kings",   opt2="devotion",    isPlayer=false},
+        {class="Paladin", spec="holy",    opt1="wisdom",  opt2="concentration", isPlayer=false},
+        {class="Paladin", spec="holy",    opt1="none",    opt2="none",        isPlayer=false},
+        {class="Warrior", spec="prot",    opt1="none",    opt2="none",        isPlayer=false},
+        {class="Warrior", spec="arms",    opt1="none",    opt2="none",        isPlayer=false},
+        {class="Warrior", spec="arms",    opt1="none",    opt2="none",        isPlayer=false},
+        {class="Warrior", spec="fury",    opt1="none",    opt2="none",        isPlayer=false},
+        {class="Warrior", spec="fury",    opt1="none",    opt2="none",        isPlayer=false},
+        {class="Druid",   spec="bear",    opt1="none",    opt2="none",        isPlayer=false},
+        {class="Druid",   spec="cat",     opt1="none",    opt2="none",        isPlayer=false},
+        {class="Druid",   spec="resto",   opt1="none",    opt2="none",        isPlayer=false},
+        {class="Druid",   spec="resto",   opt1="none",    opt2="none",        isPlayer=false},
+        {class="Druid",   spec="balance", opt1="none",    opt2="none",        isPlayer=false},
+        {class="Priest",  spec="holy",    opt1="none",    opt2="none",        isPlayer=false},
+        {class="Priest",  spec="holy",    opt1="none",    opt2="none",        isPlayer=false},
+        {class="Priest",  spec="disc",    opt1="none",    opt2="none",        isPlayer=false},
+        {class="Priest",  spec="shadow",  opt1="shadow res", opt2="none",     isPlayer=false},
+        {class="Priest",  spec="shadow",  opt1="none",    opt2="none",        isPlayer=false},
+        {class="Shaman",  spec="resto",   opt1="healing", opt2="none",        isPlayer=false},
+        {class="Shaman",  spec="resto",   opt1="healing", opt2="none",        isPlayer=false},
+        {class="Shaman",  spec="enh",     opt1="melee",   opt2="none",        isPlayer=false},
+        {class="Shaman",  spec="ele",     opt1="caster",  opt2="none",        isPlayer=false},
+        {class="Shaman",  spec="ele",     opt1="caster",  opt2="none",        isPlayer=false},
+        {class="Hunter",  spec="bm",      opt1="none",    opt2="none",        isPlayer=false},
+        {class="Hunter",  spec="bm",      opt1="none",    opt2="none",        isPlayer=false},
+        {class="Hunter",  spec="mm",      opt1="none",    opt2="none",        isPlayer=false},
+        {class="Hunter",  spec="surv",    opt1="none",    opt2="none",        isPlayer=false},
+        {class="Hunter",  spec="surv",    opt1="none",    opt2="none",        isPlayer=false},
+        {class="Rogue",   spec="combat",  opt1="none",    opt2="none",        isPlayer=false},
+        {class="Rogue",   spec="combat",  opt1="none",    opt2="none",        isPlayer=false},
+        {class="Rogue",   spec="combat",  opt1="none",    opt2="none",        isPlayer=false},
+        {class="Rogue",   spec="as",      opt1="none",    opt2="none",        isPlayer=false},
+        {class="Mage",    spec="arcane",  opt1="none",    opt2="none",        isPlayer=false},
+        {class="Mage",    spec="fire",    opt1="none",    opt2="none",        isPlayer=false},
+        {class="Mage",    spec="fire",    opt1="none",    opt2="none",        isPlayer=false},
+        {class="Mage",    spec="frost",   opt1="none",    opt2="none",        isPlayer=false},
+        {class="Warlock", spec="affli",   opt1="none",    opt2="none",        isPlayer=false},
+        {class="Warlock", spec="demo",    opt1="none",    opt2="none",        isPlayer=false},
+        {class="Warlock", spec="destro",  opt1="none",    opt2="none",        isPlayer=false},
+    }
+}
+
+if not OptimalRaidCompDB.comps["Default 40-Man"] then
+    OptimalRaidCompDB.comps["Default 40-Man"] = default40Man
 end
 
 -- ==================== CORE LOGIC ====================
@@ -1106,7 +1155,7 @@ end
 
 local function RefreshSizeDD()
     UIDropDownMenu_Initialize(sizeDD, function()
-        local sizes = {5, 10, 25}
+        local sizes = {5, 10, 25, 40}
         for _, s in ipairs(sizes) do
             local info = UIDropDownMenu_CreateInfo()
             info.text = s .. "-Man"
@@ -1166,7 +1215,7 @@ end)
 
 -- ==================== BOT CONTROL ====================
 local controlButtons, controlChecks = {}, {}
-local cmdWin, cmdClose      -- floating Commands window + its close button
+local cmdWin                 -- always-visible Commands window
 local RefreshControlLayout, RestoreControlState
 
 do
@@ -1178,8 +1227,8 @@ do
     end
 
     ------------------------------------------------------------------
-    -- Main-window controls: a top row (formation + reinit/loot + the button
-    -- that opens the Commands window) and the two toggles on the size row.
+    -- Main-window controls: a top row for formation/reinit/loot and two toggles
+    -- on the size row. The Commands window is the permanent live-control hub.
     ------------------------------------------------------------------
     local formLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     formLabel:SetPoint("TOPLEFT", 18, -46); formLabel:SetText("Formation:")
@@ -1191,7 +1240,6 @@ do
     local checkForm = CBtn(frame, "Check", 52, 22);    checkForm:SetPoint("TOPLEFT", 280, -44)
     local reinitBtn = CBtn(frame, "Reinit", 60, 22);   reinitBtn:SetPoint("TOPLEFT", 344, -44)
     local lootBtn   = CBtn(frame, "Loot FFA", 70, 22); lootBtn:SetPoint("TOPLEFT", 406, -44)
-    local cmdBtn    = CBtn(frame, "Commands", 90, 22); cmdBtn:SetPoint("TOPLEFT", 480, -44)
 
     local function SetFormText() formText:SetText(OptimalRaidCompDB.selectedFormation or formations[1].name) end
     local function CycleFormation(step)
@@ -1228,11 +1276,11 @@ do
         function(v) OptimalRaidCompDB.tradeWhisper = v end)
 
     ------------------------------------------------------------------
-    -- Floating Commands window: the behavior grid + footer actions. Movable
-    -- and toggled by the main window's "Commands" button (like the launcher).
+    -- Commands window: the always-visible live-control hub. It is movable but
+    -- deliberately has no close button, so it remains available at all times.
     ------------------------------------------------------------------
     cmdWin = CreateFrame("Frame", "ORC_CommandsWindow", UIParent)
-    cmdWin:SetSize(360, 252)
+    cmdWin:SetSize(425, 252)
     cmdWin:SetPoint("CENTER", OptimalRaidCompDB.cmdWinPos.x, OptimalRaidCompDB.cmdWinPos.y)
     cmdWin:SetMovable(true); cmdWin:EnableMouse(true); cmdWin:RegisterForDrag("LeftButton")
     cmdWin:SetScript("OnDragStart", cmdWin.StartMoving)
@@ -1246,16 +1294,18 @@ do
     cmdWin:SetBackdrop({bgFile="Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border", tile=true, tileSize=32, edgeSize=32, insets={left=11, right=12, top=12, bottom=11}})
     cmdWin:SetBackdropColor(0, 0, 0, 1)
 
-    cmdClose = CreateFrame("Button", nil, cmdWin, "UIPanelCloseButton"); cmdClose:SetPoint("TOPRIGHT", -4, -4)
-    cmdClose:SetScript("OnClick", function() cmdWin:Hide(); OptimalRaidCompDB.cmdWinShown = false end)
     local cmdTitle = cmdWin:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     cmdTitle:SetPoint("TOPLEFT", 14, -12); cmdTitle:SetText("ORC Commands")
-    local moreBtn = CBtn(cmdWin, "More", 60, 20); moreBtn:SetPoint("TOPRIGHT", -28, -10)
+    local quickBtn = CBtn(cmdWin, "Quick Create", 78, 20); quickBtn:SetPoint("TOPLEFT", 112, -9)
+    local stopBtn  = CBtn(cmdWin, "STOP", 64, 20);         stopBtn:SetPoint("LEFT", quickBtn, "RIGHT", 4, 0)
+    local planBtn  = CBtn(cmdWin, "Planner", 70, 20);      planBtn:SetPoint("LEFT", stopBtn, "RIGHT", 4, 0)
+    local moreBtn  = CBtn(cmdWin, "More", 60, 20);         moreBtn:SetPoint("LEFT", planBtn, "RIGHT", 4, 0)
 
-    cmdBtn:SetScript("OnClick", function()
-        if cmdWin:IsShown() then cmdWin:Hide(); OptimalRaidCompDB.cmdWinShown = false
-        else cmdWin:Show(); OptimalRaidCompDB.cmdWinShown = true end
+    quickBtn:SetScript("OnClick", function() SafeSummon(BuildCompFromSlots()) end)
+    stopBtn:SetScript("OnClick", function()
+        if activeSummonFrame then activeSummonFrame:Hide(); activeSummonFrame = nil; print("|cffff0000[ORC] Summoning ABORTED.|r") end
     end)
+    planBtn:SetScript("OnClick", function() frame:Show() end)
 
     -- Track the last order ORC sent each role so 'attack' can break a stay/flee lock
     -- by sending 'follow' first; a double-tap of attack within 1.5s forces the same
@@ -1304,8 +1354,6 @@ do
         if item.command then
             local cmd = item.command
             b:SetScript("OnClick", function() SendBotOrder(cmd) end)
-        elseif item.label == "Skull" then
-            b:SetScript("OnClick", function() SendBotOrder("rti skull"); SendBotOrder("attack rti target") end)
         end
     end
 
@@ -1328,10 +1376,8 @@ do
     -- available by PLAYER_LOGIN), so reading them now yields defaults, not the saved
     -- values. RestoreControlState re-seeds missing keys and re-applies the saved control
     -- state; it runs once here (first-run/safety) and again from PLAYER_LOGIN, where the
-    -- real saved data exists. Visibility is persisted ONLY via explicit clicks (Commands
-    -- button / the X), never via OnHide -- OnHide also fires during /reload teardown and
-    -- would always save "closed". The window is also kept out of UISpecialFrames so
-    -- Escape / loading screens can't auto-close it.
+    -- real saved data exists. The window is deliberately kept out of UISpecialFrames so
+    -- Escape / loading screens cannot auto-close the always-available controls.
     function RestoreControlState()
         local db = OptimalRaidCompDB
         if db.selectedFormation == nil then db.selectedFormation = "Shield" end
@@ -1340,8 +1386,6 @@ do
         if db.autoLevelUp == nil then db.autoLevelUp = true end
         if db.tradeWhisper == nil then db.tradeWhisper = true end
         if db.cmdWinPos == nil then db.cmdWinPos = { point = "CENTER", rel = "CENTER", x = 300, y = 0 } end
-        if db.cmdWinShown == nil then db.cmdWinShown = false end
-
         SetFormText()
         autoChk:SetChecked(db.autoLevelUp)
         tradeChk:SetChecked(db.tradeWhisper)
@@ -1350,40 +1394,10 @@ do
         local p = db.cmdWinPos
         cmdWin:ClearAllPoints()
         cmdWin:SetPoint(p.point or "CENTER", UIParent, p.rel or p.point or "CENTER", p.x or 0, p.y or 0)
-        if db.cmdWinShown then cmdWin:Show() else cmdWin:Hide() end
+        cmdWin:Show()
     end
     RestoreControlState()
 end
-
--- ==================== LAUNCHER ====================
-local launch = CreateFrame("Button", "ORC_Launcher", UIParent)
-launch:SetSize(110, 60); launch:SetPoint("CENTER", OptimalRaidCompDB.buttonPos.x, OptimalRaidCompDB.buttonPos.y)
-launch:SetMovable(true); launch:EnableMouse(true); launch:RegisterForDrag("RightButton")
-launch:SetBackdrop({bgFile="Interface\\ChatFrame\\ChatFrameBackground", edgeFile="Interface\\Tooltips\\UI-Tooltip-Border", tile=true, tileSize=16, edgeSize=12, insets={left=3, right=3, top=3, bottom=3}})
-launch:SetBackdropColor(0,0,0,0.8); launch:SetBackdropBorderColor(0.7, 0.7, 0, 1)
-
-launch.t = launch:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-launch.t:SetPoint("TOP", 0, -5); launch.t:SetText("|cffffcc00ORC|r")
-
-local qs = CreateFrame("Button", nil, launch, "UIPanelButtonTemplate")
-qs:SetSize(90, 18); qs:SetPoint("TOP", 0, -20); qs:SetText("Quick Create")
-qs:SetNormalFontObject("GameFontNormalSmall")
-qs:SetScript("OnClick", function()
-    local temp = { slots = {} }
-    for j=1, MAX_ROWS do temp.slots[j] = { class=slots[j].class, spec=slots[j].spec, opt1=slots[j].opt1, opt2=slots[j].opt2, isPlayer=slots[j].isPlayer } end
-    SafeSummon(temp)
-end)
-
-local stopBtn = CreateFrame("Button", nil, launch, "UIPanelButtonTemplate")
-stopBtn:SetSize(90, 18); stopBtn:SetPoint("TOP", qs, "BOTTOM", 0, -2); stopBtn:SetText("STOP Summon")
-stopBtn:SetNormalFontObject("GameFontNormalSmall")
-stopBtn:SetScript("OnClick", function()
-    if activeSummonFrame then activeSummonFrame:Hide(); activeSummonFrame = nil; print("|cffff0000[ORC] Summoning ABORTED.|r") end
-end)
-
-launch:SetScript("OnClick", function(self, button) if button == "LeftButton" then if frame:IsShown() then frame:Hide() else frame:Show() end end end)
-launch:SetScript("OnDragStart", function(self) self:StartMoving() end)
-launch:SetScript("OnDragStop", function(self) self:StopMovingOrSizing(); local _, _, _, x, y = self:GetPoint(); OptimalRaidCompDB.buttonPos = { x = x, y = y } end)
 
 -- ==================== ELVUI SKINNING ====================
 -- Match the ElvUI look when it's installed. Wrapped in pcall so a skin error
@@ -1420,23 +1434,16 @@ local function ApplyElvUISkin()
         btn(checkBtn); btn(zoneBtn); btn(pushSpecBtn); btn(pushGearBtn)
         btn(pushBuffBtn); btn(sortBtn); btn(summonBtn)
 
-        -- Bot control (formation/reinit/loot/commands + grid/footer buttons, toggles)
+        -- Bot control (formation/reinit/loot + Commands window/grid/footer buttons, toggles)
         for _, b in ipairs(controlButtons) do btn(b) end
         for _, c in ipairs(controlChecks) do chk(c) end
         if cmdWin then
             if cmdWin.StripTextures then cmdWin:StripTextures() end
             if cmdWin.SetTemplate then cmdWin:SetTemplate("Transparent") end
         end
-        if cmdClose and S.HandleCloseButton then S:HandleCloseButton(cmdClose) end
-
         -- Scrollbar
         local sb = _G["OptimalRaidCompFauxScrollScrollBar"]
         if sb and S.HandleScrollBar then S:HandleScrollBar(sb) end
-
-        -- Launcher
-        if launch.StripTextures then launch:StripTextures() end
-        if launch.SetTemplate then launch:SetTemplate("Transparent") end
-        btn(qs); btn(stopBtn)
     end)
 
     if ok then

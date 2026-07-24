@@ -14,7 +14,7 @@ A lightweight, powerful composition manager designed specifically for World of W
 
 ORC now also covers **live bot control**, absorbing the functionality of the discontinued *Warstorm Bot Manager* addon (disable that one to avoid duplicate keybinds). See [Bot Control](#bot-control) for the full rundown.
 
-* **Live orders:** A movable **ORC Commands** window with a role-targeted behavior grid (attack / stay / follow / flee for all, tank, heal, dps, melee, ranged) plus Summon / Release / Drink / Skull / CC.
+* **Live orders:** An always-available, movable **ORC Commands** window with a role-targeted behavior grid (attack / stay / follow / flee for all, tank, heal, dps, melee, ranged), Quick Create, STOP, Planner, Summon, and Release.
 * **Smart attack reset:** `attack` auto-sends `follow` first to break a `stay`/`flee` lock, and a double-tap forces the reset for any case it didn't track.
 * **Formations:** Cycle and Set/Check the 8 bot formations from the main window.
 * **Reinit & loot:** One-click `init=epic` + re-spec + autogear, and Free-For-All / Epic loot (auto-applied on summon).
@@ -28,7 +28,7 @@ ORC now also covers **live bot control**, absorbing the functionality of the dis
 * **ElvUI Skinning:** When ElvUI is installed, ORC automatically skins all of its frames, buttons, dropdowns, checkboxes, and the scrollbar to match the ElvUI look. Falls back cleanly to the default Blizzard look when ElvUI is absent.
 * **Profile Size Consistency:** Profiles now always honor their saved raid size — overwriting any profile (including the built-in *Default 5-Man*) while in a different size no longer snaps it back to 5.
 * **Warrior Shout Dropdown Removed:** Warriors no longer show a buff/strategy dropdown, since the server has no shout strategy tokens.
-* **Window Controls:** Move the main window by left-click-dragging its background; move the launcher with **right**-click-drag; mouse-wheel over the window to resize (0.5–2.0, persisted).
+* **Window Controls:** Move the main window by left-click-dragging its background; move **ORC Commands** by left-click-dragging it; mouse-wheel over the main window to resize (0.5–2.0, persisted).
 
 ## What's New in v2.4
 
@@ -62,11 +62,11 @@ The main window gained a top row and two toggles:
 * **Trade payout whisper:** Optional (checkbox) — when you place green-or-better items in a trade with a bot, ORC whispers the partner the payout (3× the items' vendor value) so the sale is instant. Verify with `/orc tradevalue`.
 * **Spec-confirm gating:** During summon/reinit, ORC waits for each bot to confirm its spec (`picking …`) before sending autogear, so gear is never applied for the wrong spec (it proceeds anyway after a short timeout).
 
-The **Commands** button opens a small, movable **ORC Commands** window (drag it anywhere; its position is remembered, and it stays open until you close it — it won't vanish on loading screens) with the live orders:
+The always-visible, movable **ORC Commands** window is the live-control hub. Drag it anywhere; its position is remembered and it stays available through loading screens. Its title row contains **Quick Create**, **STOP**, and **Planner** (which opens the composition-planning window).
 
 * **Behavior grid:** Order bots to **attack / stay / follow / flee**. The **all** and **tank** rows are shown by default; click **More** to reveal **heal / dps / melee / ranged** rows for role-targeted orders (e.g. only the tank attacks). Orders go to your raid in a raid, your party otherwise.
 * **Smart attack reset:** `stay` and `flee` lock bots in place until you tell them to `follow` again, so a plain `attack` won't re-engage them. The **attack** button handles this for you — it automatically sends `follow` first when it knows the role is parked, and **double-tapping attack** (within ~1.5s) forces that reset for any situation it didn't track.
-* **Footer actions:** **Summon** (teleport bots to you), **Release**, **Drink** (rest), **Skull** (marks + attacks the skull target), and **CC** (crowd-controls the moon target).
+* **Footer actions:** **Summon** (teleport bots to you) and **Release**.
 
 ### Slash commands & keybindings
 
@@ -86,9 +86,9 @@ The **Commands** button opens a small, movable **ORC Commands** window (drag it 
 
 ## Usage
 
-Type `/orc` in chat or click the floating **ORC** mini-launcher button to open the main interface.
+Type `/orc` in chat or click **Planner** in **ORC Commands** to open the main interface.
 
-1.  **Select Size:** Choose 5, 10, or 25-Man from the bottom dropdown.
+1.  **Select Size:** Choose 5, 10, 25, or 40-Man from the bottom dropdown. A balanced **Default 40-Man** profile is included.
 2.  **Build Your Comp:** Use the dropdowns on each row to select a Class and Spec. If applicable, select their specific Buff and Utility/Aura from the extended dropdowns.
 3.  **Set the Player:** Check the **Player** box on the row that represents your character. The addon will skip bot commands for this slot.
 4.  **Create Group:** Click **Create** to initiate the automated sequence. The addon handles the invites, waits for raid conversion, pushes specs and AI strategies, auto-gears, applies world buffs, and sorts the raid automatically.

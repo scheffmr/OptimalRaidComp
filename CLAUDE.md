@@ -39,14 +39,14 @@ Credits: Authors **Runshouse** and **Marco**, original design by **Xhausted**.
 
 ## How to use it in-game
 
-- Open/close UI: `/orc` slash command, or left-click the floating **ORC** launcher button.
+- Open/close the planner: `/orc` slash command or the **Planner** button in **ORC Commands**.
 - **Main window** builds/summons a comp and holds the formation cycler, **Reinit**, **Loot FFA**,
-  the two toggles (auto-reinit, trade-whisper), and a **Commands** button.
-- **Commands** button opens a separate movable **ORC Commands** window (the behavior grid +
-  Summon/Release/Drink/Skull/CC footer + More). Drag it anywhere; position and open/closed state
-  persist (it is intentionally NOT in `UISpecialFrames`, so Escape/loading screens don't close it).
+  and the two toggles (auto-reinit, trade-whisper).
+- **ORC Commands** is an always-visible movable window (behavior grid + Summon/Release footer +
+  More). Its title row has **Quick Create**, **STOP**, and **Planner**. Drag it anywhere; its
+  position persists and it is intentionally NOT in `UISpecialFrames`.
 - **Move the main window:** left-click-drag the window background.
-- **Move the launcher button:** **right**-click-drag (left-click = Quick Create).
+- **Move ORC Commands:** left-click-drag its background.
 - **Resize the main window:** mouse-wheel over it (scale clamped 0.5–2.0, persisted).
 - **Slash extras:** `/orc reinit`, `/orc loot`, `/orc tradewhisper [on|off]`, `/orc tradevalue`.
 - **Keybinds:** Esc → Key Bindings → "Optimal Raid Comp" (toggle, summon, attack, follow, stay, RTSC).
@@ -55,7 +55,7 @@ Credits: Authors **Runshouse** and **Marco**, original design by **Xhausted**.
 
 (Single file; line numbers drift, so this lists sections in load order.)
 
-- **Saved variables** (`OptimalRaidCompDB`): `comps`, `currentComp`, `buttonPos`, `scale`,
+- **Saved variables** (`OptimalRaidCompDB`): `comps`, `currentComp`, `scale`,
   `raidSize`, plus control state `selectedTab`, `selectedFormation(+Index)`, `controlExpanded`,
   `autoLevelUp`, `tradeWhisper`. A `do` block seeds new keys into existing DBs at load.
 - **`BuildCompFromSlots`**: snapshots the visible rows into a comp table (used by buttons,
@@ -68,7 +68,7 @@ Credits: Authors **Runshouse** and **Marco**, original design by **Xhausted**.
   - `confirmFrame` + `AwaitSpecConfirms(names, timeout, onDone)` + `WarnSpecMissing` — wait for
     each bot's `picking <spec>` WHISPER before autogear (6s timeout, warns on miss).
 - **Control data**: `formations`, `roles` (each has a `@<role> ` prefix; `all` is bare),
-  `actions` (`attack/stay/follow/flee`), `footer` (Summon/Release/Drink/Skull/CC).
+  `actions` (`attack/stay/follow/flee`), `footer` (Summon/Release).
 - **`GetOptionsForClassSpec`**: spec-dependent buff/aura/totem dropdown options (Paladin,
   Shaman, Priest). Warriors have no options dropdown — the server has no shout tokens.
 - **`PushAutogear` / `PushWorldBuffs` / `SetGroupLoot`** (`IsGroupLeader` → Free For All + Epic).
@@ -84,17 +84,16 @@ Credits: Authors **Runshouse** and **Marco**, original design by **Xhausted**.
 - **`SortRaidGroup`**: role-based subgroup packing (melee/tanks → ranged/casters → healers).
 - **Trade payout**: hidden-tooltip vendor-value scan (`GetItemInfo` has no sell price on
   3.3.5a) → whisper partner 3× value on `TRADE_PLAYER_ITEM_CHANGED`. Gated by `tradeWhisper`.
-- **UI build**: main frame (700×490), per-row dropdowns, bottom action row.
+- **UI build**: main frame (700×490), up to 40 per-row dropdowns, bottom action row.
 - **Bot control** (`do` block): no tabs — adds a top row to the main window (formation cycler +
-  Set/Check, **Reinit**, **Loot FFA**, **Commands**) and the two toggles on the size row.
-  **Commands** toggles a separate movable window `ORC_CommandsWindow` (`cmdWin`, position in
-  `cmdWinPos`) holding the role×action grid (all+tank default; `More`/`Less` reveals the rest via
-  `RefreshControlLayout`, which repositions the footer and resizes the window) and the
-  Summon/Release/Drink/Skull/CC footer. **Attack-reset** lives in `GridClick`: tracks `lastOrder`
+  Set/Check, **Reinit**, **Loot FFA**) and the two toggles on the size row. The always-visible,
+  movable `ORC_CommandsWindow` (`cmdWin`, position in `cmdWinPos`) holds Quick Create, STOP,
+  Planner, the role×action grid (all+tank default; `More`/`Less` reveals the rest via
+  `RefreshControlLayout`), and a Summon/Release footer. **Attack-reset** lives in `GridClick`: tracks `lastOrder`
   per role and prepends `follow` when it was stay/flee, and a double-tap of attack within 1.5s
   forces the reset.
-- **Launcher** + **`ApplyElvUISkin`** (optional, `pcall`-wrapped, runs once from `PLAYER_LOGIN`;
-  also skins the control-tab buttons/checkboxes; no-ops without ElvUI; `.toc` `OptionalDeps: ElvUI`).
+- **`ApplyElvUISkin`** (optional, `pcall`-wrapped, runs once from `PLAYER_LOGIN`; also skins the
+  command-window buttons and checkboxes; no-ops without ElvUI; `.toc` `OptionalDeps: ElvUI`).
 - **Keybinding globals** (`ORC_Toggle`/`ORC_Summon`/…, `BINDING_*` labels) — the only
   intentional globals, required because Bindings.xml calls functions by name.
 - **Slash command**: `/orc` (+ `reinit`/`loot`/`tradewhisper`/`tradevalue` subcommands).
